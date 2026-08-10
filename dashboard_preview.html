@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>陳情案件戰情儀表板（假資料預覽）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f4f2ed;
+    --surface: #ffffff;
+    --border: #e0ddd6;
+    --text-primary: #1a1916;
+    --text-secondary: #6b6860;
+    --accent: #2a5caa;
+    --accent-light: #e8eef9;
+    --success: #1a7a4a;
+    --success-light: #e6f4ec;
+    --warn: #a5680e;
+    --warn-light: #fbf1e0;
+    --error: #c0392b;
+    --error-light: #fdf0ee;
+    --tag-bg: #edeae3;
+  }
+
+  body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 40px 20px 60px;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    flex-wrap: wrap; gap: 16px; margin-bottom: 28px;
+  }
+  .eyebrow {
+    font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px;
+  }
+  h1 { font-size: 26px; font-weight: 900; line-height: 1.3; }
+  .scope-note { font-size: 13px; color: var(--text-secondary); margin-top: 8px; line-height: 1.6; max-width: 620px; }
+
+  .n-day-control {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px;
+  }
+  .n-day-control label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .n-day-control input {
+    width: 64px; padding: 6px 8px; font-family: 'DM Mono', monospace; font-size: 15px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+    color: var(--text-primary); text-align: center; outline: none;
+  }
+  .n-day-control input:focus { border-color: var(--accent); }
+
+  #loading {
+    display: flex; align-items: center; gap: 10px; font-size: 13px;
+    color: var(--text-secondary); margin: 40px 0;
+  }
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #errorBox {
+    display: none; background: var(--error-light); color: var(--error);
+    padding: 14px 18px; border-radius: 10px; font-size: 13px; margin-bottom: 20px;
+  }
+
+  #dashboard { display: none; }
+
+  .login-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px; max-width: 480px;
+  }
+  .login-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .login-row input {
+    flex: 1; padding: 12px 14px; font-family: 'Noto Sans TC', sans-serif; font-size: 14px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+    color: var(--text-primary); outline: none;
+  }
+  .login-row input:focus { border-color: var(--accent); }
+  .login-row button {
+    padding: 12px 20px; background: var(--accent); color: #fff; font-family: 'Noto Sans TC', sans-serif;
+    font-size: 14px; font-weight: 500; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  }
+  .login-row button:hover { background: #1e4a91; }
+  .login-row button:disabled { background: #a0b4d4; cursor: not-allowed; }
+  #loginNotice {
+    display: none; font-size: 13px; padding: 10px 14px; border-radius: 8px; margin-top: 4px;
+  }
+  #loginNotice.error { display: block; background: var(--error-light); color: var(--error); }
+  #loginNotice.success { display: block; background: var(--success-light); color: var(--success); }
+
+  /* 頂列：左1/4 主要數字，右3/4 每日新增趨勢圖 */
+  .top-row { display: flex; gap: 20px; margin-bottom: 20px; align-items: stretch; }
+  .hero-main-col {
+    flex: 0 0 26%; min-width: 220px;
+    background: var(--text-primary); color: #fff; border-radius: 16px;
+    padding: 28px 24px; display: flex; flex-direction: column; justify-content: center; gap: 22px;
+  }
+  .hero-divider-h { height: 1px; background: rgba(255,255,255,0.15); }
+  .top-row .chart-card { flex: 1; margin: 0; }
+
+  .hero-label {
+    font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #c2c0b6; margin-bottom: 10px;
+  }
+  .hero-number { font-size: 48px; font-weight: 900; line-height: 1; color: #ff9d7a; }
+  .hero-number-total { color: #fff; }
+  .hero-number-today-new { color: #60A5FA; }
+  .hero-unit { font-size: 16px; font-weight: 500; color: #c2c0b6; margin-left: 6px; }
+  .hero-pct-inline { font-size: 14px; font-weight: 500; color: #c2c0b6; margin-left: 8px; }
+  .hero-sub { font-size: 13px; color: #c2c0b6; margin-top: 8px; line-height: 1.5; }
+
+  /* 次要資訊：不屬於本次處理範圍／排除跳題，縮小當備註 */
+  .footnote-stats {
+    margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-secondary); line-height: 1.9;
+  }
+  .footnote-stats strong { color: var(--text-primary); font-weight: 700; font-size: 15px; }
+  .footnote-sep { margin: 0 10px; color: var(--border); }
+
+  /* 中區塊：狀態分布 */
+  .section-title {
+    font-size: 13px; font-weight: 500; color: var(--text-secondary);
+    margin: 28px 0 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .status-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin-bottom: 8px;
+  }
+  .status-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .status-card-name { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+  .status-card-count { font-size: 30px; font-weight: 700; color: var(--text-primary); }
+  .status-card-pct { font-size: 13px; color: var(--accent); font-family: 'DM Mono', monospace; }
+  .status-card-bar { height: 4px; border-radius: 2px; background: var(--tag-bg); margin-top: 10px; overflow: hidden; }
+  .status-card-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+
+  /* 圖表區 */
+  .chart-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; margin-top: 8px; }
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 24px;
+  }
+  .chart-card h3 { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+  .chart-card p { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
+  .chart-wrap { position: relative; height: 320px; }
+
+  footer { margin-top: 40px; text-align: center; font-size: 12px; color: var(--text-secondary); }
+
+  @media (max-width: 760px) {
+    .chart-row { grid-template-columns: 1fr; }
+    .top-row { flex-direction: column; }
+    .hero-main-col { flex: 0 0 auto; max-width: 100%; }
+    .chart-wrap { height: 240px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:10px; padding:12px 18px; margin-bottom:20px; font-size:13px; color:#92400e;">
+    ⚠️ 這是<strong>假資料預覽版</strong>，所有數字都是隨機產生，不是真實案件資料，也不會連線到後端 API，純粹讓你看排版跟圖表效果。
+  </div>
+
+  <div id="mainContent">
+    <header>
+      <div>
+        <p class="eyebrow">陳情案件戰情儀表板</p>
+        <h1>案件處理總覽</h1>
+      </div>
+      <div class="n-day-control">
+        <label for="daysInput">逾期天數門檻</label>
+        <input type="number" id="daysInput" value="7" min="1" max="90" />
+        <label>天</label>
+      </div>
+    </header>
+
+    <div id="loading"><div class="spinner"></div><span>載入資料中，請稍候…</span></div>
+    <div id="errorBox"></div>
+
+    <div id="dashboard">
+      <!-- 1. 頂列：左 1/4 主要數字（全部案件／逾期未處理），右 3/4 每日新增案件趨勢圖 -->
+      <div class="top-row">
+        <div class="hero-main-col">
+          <div>
+            <div class="hero-label">今日新增</div>
+            <div><span class="hero-number hero-number-today-new" id="todayNewCount">0</span><span class="hero-unit">件</span></div>
+          </div>
+          <div class="hero-divider-h"></div>
+          <div>
+            <div class="hero-label">全部案件</div>
+            <div><span class="hero-number hero-number-total" id="totalCount">0</span><span class="hero-unit">件</span></div>
+          </div>
+          <div class="hero-divider-h"></div>
+          <div>
+            <div class="hero-label">逾期未處理（超過門檻天數、處理狀態仍空白）</div>
+            <div>
+              <span class="hero-number" id="overdueCount">0</span><span class="hero-unit">件</span><span class="hero-pct-inline" id="overduePct"></span>
+              <div class="hero-sub" id="overdueSub"></div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3>每日新增案件趨勢</h3>
+          <p>近 30 天，依提交時間統計，「全部」為總量，點圖例可切換單一縣市</p>
+          <div class="chart-wrap"><canvas id="dailyTrendChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 2. 今日各縣市處理案件量 -->
+      <div class="section-title">今日各縣市處理案件量</div>
+      <div class="chart-card">
+        <h3>今日案件異動：<span id="todayCount">0</span> 件</h3>
+        <p id="todaySub">依「最後更新時間」統計，今日有異動的案件，依處理狀態分組堆疊</p>
+        <div class="chart-wrap"><canvas id="todayCityChart"></canvas></div>
+      </div>
+
+      <!-- 3. 處理狀態分布 -->
+      <div class="section-title">處理狀態分布（已有狀態的案件）</div>
+      <div class="status-grid" id="statusGrid"></div>
+
+      <!-- 4. 各縣市處理進度＋案件量縣市分布 -->
+      <div class="chart-row">
+        <div class="chart-card">
+          <h3>各縣市處理進度</h3>
+          <p>未處理（範疇內／範疇外）與已處理案件量堆疊比較</p>
+          <div class="chart-wrap"><canvas id="cityBarChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>案件量縣市分布</h3>
+          <p>全部案件依縣市分組佔比</p>
+          <div class="chart-wrap"><canvas id="cityPieChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 5. 次要資訊：不屬於本次處理範圍、排除跳題，縮小當備註 -->
+      <div class="footnote-stats">
+        <span>不屬於本次處理範圍：<strong id="outOfScopeCount">0</strong> 件（<span id="outOfScopePct"></span>）－ 非寄居蟹租屋公司房東房客，或非社會住宅包租代管案件</span>
+        <span class="footnote-sep">・</span>
+        <span>排除跳題（無縣市）：<strong id="noCityCount">0</strong> 件 － 一開頭就被排除跳題到問卷結尾，縣市等後續欄位未填寫，不計入以上統計</span>
+        <p id="scopeNote" style="margin-top: 8px;"></p>
+      </div>
+    </div>
+
+    <footer>資料來源：Google 表單回應試算表</footer>
+  </div>
+
+</div>
+
+<script>
+  // 預覽版不連線任何後端，WEB_APP_URL 不需要
+
+  const CHART_COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#2DD4BF'];
+  const TREND_TOTAL_COLOR = '#334155';
+
+  // 「今日各縣市處理案件量」長條圖用的是處理狀態分組，跟縣市是不同維度，配色也分開管理
+  const STATUS_COLORS = {
+    '聯繫中': '#FBBF24',
+    '轉介中': '#FB923C',
+    '已轉介指定業者': '#818CF8',
+    '已轉介輪派業者': '#C084FC',
+    '無需處理/結案': '#94A3B8'
+  };
+  // 沒對應到上面清單的狀態值（例如業務單位又改了用詞），用這組備援色，不會沒有顏色可用
+  const STATUS_FALLBACK_COLORS = ['#60A5FA', '#34D399', '#F87171', '#2DD4BF'];
+  function getStatusColor(status, fallbackIndex) {
+    if (STATUS_COLORS[status]) return STATUS_COLORS[status];
+    return STATUS_FALLBACK_COLORS[fallbackIndex % STATUS_FALLBACK_COLORS.length];
+  }
+
+  // 預覽版不需要登入 token
+  let allRows = [];
+  let barChart = null;
+  let pieChart = null;
+  let trendChart = null;
+  let todayChart = null;
+
+  // ===== 假資料產生器（純前端，不打任何 API） =====
+  const FAKE_CITIES = ['北北基宜', '桃竹苗', '中彰投', '雲嘉南', '高屏澎', '花東金馬'];
+  const FAKE_STATUSES = ['', '聯繫中', '轉介中', '已轉介指定業者', '已轉介輪派業者', '無需處理/結案'];
+  const FAKE_OUT_OF_SCOPE_CONDITIONS = [
+    { fieldName: '您是否為寄居蟹租屋公司受理服務之房東、房客?', value: '否' },
+    { fieldName: '您的案件是否屬於「社會住宅包租代管」案件？', value: '否' }
+  ];
+  const FAKE_NO_CITY_COUNT = 14;
+
+  function fakeFormatDate(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  function generateFakeRows() {
+    const rows = [];
+    const now = new Date();
+
+    for (let i = 0; i < 240; i++) {
+      const city = FAKE_CITIES[Math.floor(Math.random() * FAKE_CITIES.length)];
+      const daysAgo = Math.floor(Math.random() * 30);
+      const submittedAt = new Date(now.getTime() - daysAgo * 86400000 - Math.floor(Math.random() * 24) * 3600000);
+      const outOfScope = Math.random() < 0.07;
+
+      // 讓一部分案件維持空白（尚未處理），才會有逾期未處理可以看
+      let status = Math.random() < 0.22 ? '' : FAKE_STATUSES[1 + Math.floor(Math.random() * (FAKE_STATUSES.length - 1))];
+
+      let updateTime = '';
+      if (status) {
+        // 大約 4 成已處理案件的最後更新時間設在「今天」，today 那張圖才有東西可看
+        if (Math.random() < 0.4) {
+          const t = new Date();
+          t.setHours(8 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 60), 0, 0);
+          updateTime = fakeFormatDate(t);
+        } else {
+          const updated = new Date(submittedAt.getTime() + Math.floor(Math.random() * 5) * 86400000 + Math.floor(Math.random() * 8) * 3600000);
+          updateTime = fakeFormatDate(updated < now ? updated : now);
+        }
+      }
+
+      rows.push({
+        city: city,
+        status: status,
+        timestamp: fakeFormatDate(submittedAt),
+        updateTime: updateTime,
+        outOfScope: outOfScope
+      });
+    }
+
+    return rows;
+  }
+
+  async function loadData() {
+    if (typeof Chart === 'undefined') {
+      const box = document.getElementById('errorBox');
+      document.getElementById('loading').style.display = 'none';
+      box.style.display = 'block';
+      box.textContent = '圖表套件（Chart.js）載入失敗，請確認網路連線或重新整理頁面再試一次。';
+      return;
+    }
+
+    allRows = generateFakeRows();
+    renderScopeNote(FAKE_OUT_OF_SCOPE_CONDITIONS);
+    document.getElementById('noCityCount').textContent = FAKE_NO_CITY_COUNT;
+    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    render();
+  }
+
+  // 依後端回傳的範疇外判斷條件（不限 2 個，且每個欄位可以有各自不同的判斷值），
+  // 動態組出頁面頂端的定義說明文字，不寫死在 HTML 裡——欄位跟判斷值之後不管怎麼調，這裡都不用改
+  function renderScopeNote(conditions) {
+    const el = document.getElementById('scopeNote');
+    if (!conditions || conditions.length === 0) {
+      el.textContent = '範疇外定義：目前沒有設定任何判斷欄位（FIELD_CONFIG 裡找不到 OUT_OF_SCOPE_FIELD_ 開頭的設定）。';
+      return;
+    }
+    const text = conditions.map(cond => `「${cond.fieldName}」=${cond.value}`).join('，或 ');
+    el.textContent = `範疇外定義：${text}（符合其中一項即列入範疇外）`;
+  }
+
+  function render() {
+    const days = Math.max(1, parseInt(document.getElementById('daysInput').value, 10) || 7);
+    const stats = computeStats(allRows, days);
+    renderHero(stats, days);
+    document.getElementById('todayNewCount').textContent = computeTodayNewCount(allRows);
+    renderStatusGrid(stats);
+    renderCityBarChart(stats);
+    renderCityPieChart(stats);
+    renderDailyTrendChart(allRows);
+    renderTodayCityStats(allRows);
+  }
+
+  // 今天（Asia/Taipei）新提交的案件數，依 timestamp（提交時間）判斷，跟「今日各縣市處理案件量」
+  // 用的 updateTime（最後更新時間）是不同欄位，這裡是看「今天送出」不是「今天被公會動過」
+  function computeTodayNewCount(rows) {
+    const todayKey = getTaipeiDateKey(new Date());
+    return rows.filter(r => r.timestamp && r.timestamp.slice(0, 10) === todayKey).length;
+  }
+
+  // 用 Asia/Taipei 時區算「今天是幾號」，不受瀏覽器所在時區影響（例如公會人員如果人在國外開這頁）
+  function getTaipeiDateKey(date) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(date);
+    const map = {};
+    parts.forEach(p => { map[p.type] = p.value; });
+    return `${map.year}-${map.month}-${map.day}`;
+  }
+
+  /**
+   * 算最近 daysBack 天（含今天）每天新增幾筆案件，依 timestamp（提交時間）分組。
+   * timestamp 是後端已經格式化好的 'yyyy-MM-ddTHH:mm:ss'（Asia/Taipei），直接切前 10 碼
+   * 當日期字串比對，不用再解析時區，比較不會出錯。就算某天是 0 筆，也要出現在圖上，
+   * 折線圖才連得起來，不會漏掉「這天完全沒人送」這件事。
+   */
+  /**
+   * 算最近 daysBack 天（含今天）每天新增幾筆案件，依 timestamp（提交時間）分組，
+   * 同時拆出「全部」跟「每個縣市」各自的每日數量，供趨勢圖畫多條線。
+   * timestamp 是後端已經格式化好的 'yyyy-MM-ddTHH:mm:ss'（Asia/Taipei），直接切前 10 碼
+   * 當日期字串比對，不用再解析時區，比較不會出錯。就算某天是 0 筆，也要出現在圖上，
+   * 折線圖才連得起來，不會漏掉「這天完全沒人送」這件事。
+   */
+  function computeDailyTrendByCity(rows, daysBack) {
+    daysBack = daysBack || 30;
+    const totalCounts = {};
+    const cityDayCounts = {}; // { city: { dateKey: count } }
+    const citiesSet = new Set();
+
+    rows.forEach(r => {
+      if (!r.timestamp) return;
+      const key = r.timestamp.slice(0, 10);
+      totalCounts[key] = (totalCounts[key] || 0) + 1;
+
+      const city = r.city && r.city.trim() ? r.city : '（未填縣市）';
+      citiesSet.add(city);
+      if (!cityDayCounts[city]) cityDayCounts[city] = {};
+      cityDayCounts[city][key] = (cityDayCounts[city][key] || 0) + 1;
+    });
+
+    const labels = [];
+    const dateKeys = [];
+    const now = new Date();
+    for (let i = daysBack - 1; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const key = getTaipeiDateKey(d);
+      dateKeys.push(key);
+      labels.push(key.slice(5)); // 只顯示 MM-dd，比較好讀
+    }
+
+    const totalData = dateKeys.map(k => totalCounts[k] || 0);
+
+    // 依這 30 天內的總量排序，量大的縣市排前面，圖例順序比較好看
+    const cities = Array.from(citiesSet).sort((a, b) => {
+      const totalA = Object.values(cityDayCounts[a]).reduce((s, v) => s + v, 0);
+      const totalB = Object.values(cityDayCounts[b]).reduce((s, v) => s + v, 0);
+      return totalB - totalA;
+    });
+
+    const citySeries = cities.map(city => ({
+      city,
+      data: dateKeys.map(k => (cityDayCounts[city] && cityDayCounts[city][k]) || 0)
+    }));
+
+    return { labels, totalData, citySeries };
+  }
+
+  function renderDailyTrendChart(rows) {
+    const { labels, totalData, citySeries } = computeDailyTrendByCity(rows, 30);
+    if (trendChart) trendChart.destroy();
+
+    const datasets = [
+      {
+        label: '全部',
+        data: totalData,
+        borderColor: TREND_TOTAL_COLOR,
+        backgroundColor: 'transparent',
+        borderWidth: 3,
+        borderDash: [7, 4], // 虛線——不管顏色感知怎麼樣，一眼就能看出這條是參考線，跟其他縣市的實線不同
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0
+      },
+      ...citySeries.map((s, i) => ({
+        label: s.city,
+        data: s.data,
+        borderColor: CHART_COLORS[i % CHART_COLORS.length],
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0
+      }))
+    ];
+
+    trendChart = new Chart(document.getElementById('dailyTrendChart'), {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } },
+          x: { grid: { display: false } }
+        },
+        plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } } }
+      }
+    });
+  }
+
+  /**
+   * 依 updateTime（最後更新時間）分組，只算「今天」（Asia/Taipei）有異動的案件，
+   * 依「縣市 × 處理狀態」統計，供堆疊長條圖使用。狀態值不寫死清單，動態收集今天實際出現過的值，
+   * 之後 STATUS_OPTIONS 選項再怎麼調整，這裡都不用跟著改。
+   */
+  function computeTodayCityStatusStats(rows) {
+    const todayKey = getTaipeiDateKey(new Date());
+    const cityStatusMap = {}; // { city: { status: count } }
+    const statusSet = new Set();
+    let todayCount = 0;
+
+    rows.forEach(r => {
+      if (!r.updateTime) return; // 沒有 UPDATE_TIME 代表這筆案件還沒被公會動過，不算今日異動
+      const key = r.updateTime.slice(0, 10);
+      if (key !== todayKey) return;
+
+      todayCount++;
+      const city = r.city && r.city.trim() ? r.city : '（未填縣市）';
+      const status = r.status && r.status.trim() ? r.status : '（狀態空白）';
+      if (!cityStatusMap[city]) cityStatusMap[city] = {};
+      cityStatusMap[city][status] = (cityStatusMap[city][status] || 0) + 1;
+      statusSet.add(status);
+    });
+
+    return { todayCount, cityStatusMap, statuses: Array.from(statusSet) };
+  }
+
+  function renderTodayCityStats(rows) {
+    const { todayCount, cityStatusMap, statuses } = computeTodayCityStatusStats(rows);
+    document.getElementById('todayCount').textContent = todayCount;
+
+    if (todayChart) { todayChart.destroy(); todayChart = null; }
+
+    if (todayCount === 0) {
+      document.getElementById('todaySub').textContent = '依「最後更新時間」統計，今日目前還沒有案件被異動';
+      return;
+    }
+    document.getElementById('todaySub').textContent = '依「最後更新時間」統計，今日有異動的案件，依處理狀態分組堆疊';
+
+    const cities = Object.keys(cityStatusMap).sort((a, b) => {
+      const totalA = Object.values(cityStatusMap[a]).reduce((s, v) => s + v, 0);
+      const totalB = Object.values(cityStatusMap[b]).reduce((s, v) => s + v, 0);
+      return totalB - totalA;
+    });
+
+    const datasets = statuses.map((status, i) => ({
+      label: status,
+      data: cities.map(c => cityStatusMap[c][status] || 0),
+      backgroundColor: getStatusColor(status, i)
+    }));
+
+    todayChart = new Chart(document.getElementById('todayCityChart'), {
+      type: 'bar',
+      data: { labels: cities, datasets: datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+        },
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } }
+      }
+    });
+  }
+
+  /**
+   * 依原始資料算出：
+   * - overdueCount：處理狀態空白、且距今超過 N 天的案件數
+   * - statusCounts：處理狀態非空白的各種值各自的數量
+   * - cityStats：每個縣市的 { unprocessed（處理狀態空白）, processed（處理狀態非空白）, total }
+   * 所有百分比都是「佔全部案件」的比例，不是佔某個子集合的比例。
+   */
+  function computeStats(rows, days) {
+    const now = Date.now();
+    const thresholdMs = days * 24 * 60 * 60 * 1000;
+    const total = rows.length;
+
+    let overdueCount = 0;
+    let outOfScopeCount = 0;
+    const statusCounts = {};
+    const cityStats = {};
+
+    rows.forEach(r => {
+      const isBlank = !r.status || !r.status.trim();
+      const ts = new Date(r.timestamp).getTime();
+      const age = isNaN(ts) ? 0 : now - ts;
+
+      if (isBlank) {
+        if (age >= thresholdMs) overdueCount++;
+      } else {
+        statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
+      }
+
+      if (r.outOfScope) outOfScopeCount++;
+
+      const city = r.city && r.city.trim() ? r.city : '（未填縣市）';
+      if (!cityStats[city]) cityStats[city] = { unprocessedInScope: 0, unprocessedOutScope: 0, processed: 0, total: 0 };
+      cityStats[city].total++;
+      if (isBlank) {
+        if (r.outOfScope) cityStats[city].unprocessedOutScope++; else cityStats[city].unprocessedInScope++;
+      } else {
+        cityStats[city].processed++;
+      }
+    });
+
+    return { total, overdueCount, outOfScopeCount, statusCounts, cityStats };
+  }
+
+  function pct(n, total) {
+    if (!total) return '0%';
+    return `${((n / total) * 100).toFixed(1)}%`;
+  }
+
+  function renderHero(stats, days) {
+    document.getElementById('totalCount').textContent = stats.total;
+
+    document.getElementById('overdueCount').textContent = stats.overdueCount;
+    document.getElementById('overduePct').textContent = `（${pct(stats.overdueCount, stats.total)}）`;
+    document.getElementById('overdueSub').textContent = `門檻：提出超過 ${days} 天、處理狀態仍未填寫`;
+
+    document.getElementById('outOfScopeCount').textContent = stats.outOfScopeCount;
+    document.getElementById('outOfScopePct').textContent = pct(stats.outOfScopeCount, stats.total);
+  }
+
+  function renderStatusGrid(stats) {
+    const grid = document.getElementById('statusGrid');
+    const entries = Object.entries(stats.statusCounts).sort((a, b) => b[1] - a[1]);
+
+    if (entries.length === 0) {
+      grid.innerHTML = `<div class="status-card"><div class="status-card-name">目前沒有已填寫處理狀態的案件</div></div>`;
+      return;
+    }
+
+    grid.innerHTML = entries.map(([status, count]) => {
+      const percentText = pct(count, stats.total);
+      const percentValue = stats.total ? (count / stats.total) * 100 : 0;
+      return `
+        <div class="status-card">
+          <div class="status-card-name">${escapeHtml(status)}</div>
+          <div class="status-card-count">${count}</div>
+          <div class="status-card-pct">${percentText}</div>
+          <div class="status-card-bar"><div class="status-card-bar-fill" style="width:${percentValue}%"></div></div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderCityBarChart(stats) {
+    const cities = Object.keys(stats.cityStats).sort((a, b) => stats.cityStats[b].total - stats.cityStats[a].total);
+    const unprocessedInScope = cities.map(c => stats.cityStats[c].unprocessedInScope);
+    const unprocessedOutScope = cities.map(c => stats.cityStats[c].unprocessedOutScope);
+    const processed = cities.map(c => stats.cityStats[c].processed);
+
+    if (barChart) barChart.destroy();
+    barChart = new Chart(document.getElementById('cityBarChart'), {
+      type: 'bar',
+      data: {
+        labels: cities,
+        datasets: [
+          { label: '未處理（範疇內）', data: unprocessedInScope, backgroundColor: '#F87171' },
+          { label: '未處理（範疇外）', data: unprocessedOutScope, backgroundColor: '#94A3B8' },
+          { label: '已處理', data: processed, backgroundColor: '#34D399' }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+        },
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } } }
+      }
+    });
+  }
+
+  function renderCityPieChart(stats) {
+    const cities = Object.keys(stats.cityStats).sort((a, b) => stats.cityStats[b].total - stats.cityStats[a].total);
+    const totals = cities.map(c => stats.cityStats[c].total);
+
+    if (pieChart) pieChart.destroy();
+    pieChart = new Chart(document.getElementById('cityPieChart'), {
+      type: 'pie',
+      data: {
+        labels: cities,
+        datasets: [{ data: totals, backgroundColor: cities.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]) }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } }
+      }
+    });
+  }
+
+  function escapeHtml(value) {
+    const MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+    return String(value ?? "").replace(/[&<>"']/g, c => MAP[c]);
+  }
+
+  document.getElementById('daysInput').addEventListener('input', () => {
+    if (allRows.length > 0) render();
+  });
+
+  // 先直接嘗試載入資料，不預設一定要先登入——如果後端要求 OTP 驗證，
+  // 會收到 AUTH_REQUIRED 並自動顯示登入頁；如果後端關掉了 OTP 驗證，就直接顯示資料
+  loadData();
+</script>
+</body>
+</html>
