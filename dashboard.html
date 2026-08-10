@@ -303,6 +303,8 @@
       allRows = data.rows;
       renderScopeNote(data.outOfScopeConditions);
       document.getElementById('noCityCount').textContent = data.noCityCount || 0; // 固定值，不隨N天門檻重算
+      document.getElementById('loginGate').style.display = 'none';   // 拿到資料就代表不需要登入頁了，關掉
+      document.getElementById('mainContent').style.display = 'block'; // 外層容器本身也要打開，不然裡面渲染了也看不到
       document.getElementById('loading').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
       render();
