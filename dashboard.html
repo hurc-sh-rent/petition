@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>陳情案件戰情儀表板</title>
+<title>陳情案件戰情儀表板（假資料預覽）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -172,29 +172,11 @@
 <body>
 <div class="container">
 
-  <div id="loginGate">
-    <header>
-      <div>
-        <p class="eyebrow">陳情案件戰情儀表板</p>
-        <h1>內部登入</h1>
-        <p class="scope-note" id="loginScopeNote">輸入 Email 後會寄送驗證碼。</p>
-      </div>
-    </header>
-
-    <div class="login-box">
-      <div class="login-row">
-        <input type="email" id="loginEmail" placeholder="請輸入您的 Email" autocomplete="email" />
-        <button id="sendOtpBtn" onclick="sendOtp()">發送驗證碼</button>
-      </div>
-      <div class="login-row" id="otpRow" style="display:none;">
-        <input type="text" id="loginOtp" placeholder="輸入 6 位數驗證碼" maxlength="6" autocomplete="one-time-code" />
-        <button id="verifyOtpBtn" onclick="verifyOtp()">登入</button>
-      </div>
-      <div id="loginNotice" class="notice"></div>
-    </div>
+  <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:10px; padding:12px 18px; margin-bottom:20px; font-size:13px; color:#92400e;">
+    ⚠️ 這是<strong>假資料預覽版</strong>，所有數字都是隨機產生，不是真實案件資料，也不會連線到後端 API，純粹讓你看排版跟圖表效果。
   </div>
 
-  <div id="mainContent" style="display:none;">
+  <div id="mainContent">
     <header>
       <div>
         <p class="eyebrow">陳情案件戰情儀表板</p>
@@ -280,7 +262,7 @@
 </div>
 
 <script>
-  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxQ0HC8vVMFoNagqvfKwxzMr560dO2HCpd02JxYe1tajazQ_be74H__R-jDRcL_Fsr6Rg/exec";
+  // 預覽版不連線任何後端，WEB_APP_URL 不需要
 
 
   /**
@@ -290,7 +272,7 @@
    */
   function getCityColor(index, total) {
     const hue = Math.round((360 / Math.max(total, 1)) * index) % 360;
-    return `hsl(${hue}, 65%, 55%)`;
+    return `hsl(${hue}, 55%, 65%)`;
   }
   const TREND_TOTAL_COLOR = '#334155';
 
@@ -309,12 +291,64 @@
     return STATUS_FALLBACK_COLORS[fallbackIndex % STATUS_FALLBACK_COLORS.length];
   }
 
-  let dashboardToken = null; // 只存在記憶體，重新整理頁面就要重新登入
+  // 預覽版不需要登入 token
   let allRows = [];
   let barChart = null;
   let pieChart = null;
   let trendChart = null;
   let todayChart = null;
+
+  // ===== 假資料產生器（純前端，不打任何 API） =====
+  const FAKE_CITIES = ['北北基宜', '桃竹苗', '中彰投', '雲嘉南', '高屏澎', '花東金馬'];
+  const FAKE_STATUSES = ['', '聯繫中', '轉介中', '已轉介指定業者', '已轉介輪派業者', '無需處理/結案'];
+  const FAKE_OUT_OF_SCOPE_CONDITIONS = [
+    { fieldName: '您是否為寄居蟹租屋公司受理服務之房東、房客?', value: '否' },
+    { fieldName: '您的案件是否屬於「社會住宅包租代管」案件？', value: '否' }
+  ];
+  const FAKE_NO_CITY_COUNT = 14;
+
+  function fakeFormatDate(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  function generateFakeRows() {
+    const rows = [];
+    const now = new Date();
+
+    for (let i = 0; i < 240; i++) {
+      const city = FAKE_CITIES[Math.floor(Math.random() * FAKE_CITIES.length)];
+      const daysAgo = Math.floor(Math.random() * 30);
+      const submittedAt = new Date(now.getTime() - daysAgo * 86400000 - Math.floor(Math.random() * 24) * 3600000);
+      const outOfScope = Math.random() < 0.07;
+
+      // 讓一部分案件維持空白（尚未處理），才會有逾期未處理可以看
+      let status = Math.random() < 0.22 ? '' : FAKE_STATUSES[1 + Math.floor(Math.random() * (FAKE_STATUSES.length - 1))];
+
+      let updateTime = '';
+      if (status) {
+        // 大約 4 成已處理案件的最後更新時間設在「今天」，today 那張圖才有東西可看
+        if (Math.random() < 0.4) {
+          const t = new Date();
+          t.setHours(8 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 60), 0, 0);
+          updateTime = fakeFormatDate(t);
+        } else {
+          const updated = new Date(submittedAt.getTime() + Math.floor(Math.random() * 5) * 86400000 + Math.floor(Math.random() * 8) * 3600000);
+          updateTime = fakeFormatDate(updated < now ? updated : now);
+        }
+      }
+
+      rows.push({
+        city: city,
+        status: status,
+        timestamp: fakeFormatDate(submittedAt),
+        updateTime: updateTime,
+        outOfScope: outOfScope
+      });
+    }
+
+    return rows;
+  }
 
   async function loadData() {
     if (typeof Chart === 'undefined') {
@@ -324,125 +358,15 @@
       box.textContent = '圖表套件（Chart.js）載入失敗，請確認網路連線或重新整理頁面再試一次。';
       return;
     }
-    try {
-      const hadToken = !!dashboardToken; // 用來分辨「本來就沒登入過」跟「登入過但過期了」
-      // cache: 'no-store' + 網址帶隨機值：避免瀏覽器把這個請求的回應快取住，
-      // 每次 reload 都保證是真的打到後端拿最新資料，不是吃到舊的快取回應
-      const cacheBuster = Date.now();
-      const res = await fetch(
-        `${WEB_APP_URL}?action=dashboard&token=${encodeURIComponent(dashboardToken || '')}&_=${cacheBuster}`,
-        { redirect: 'follow', cache: 'no-store' }
-      );
-      const data = await res.json();
 
-      if (data.code === 'AUTH_REQUIRED') {
-        // token 過期或無效，退回登入頁重新驗證，不是資料錯誤
-        dashboardToken = null;
-        document.getElementById('mainContent').style.display = 'none';
-        document.getElementById('loginGate').style.display = 'block';
-        renderLoginScopeNote(data.allowedDomains); // 允許的網域清單由後端決定，前端不寫死，避免兩邊兜不起來
-        if (hadToken) showLoginNotice('error', '登入已過期，請重新驗證。'); // 第一次載入（本來就沒登入過）不用顯示這句，避免誤導
-        return;
-      }
-      if (data.status !== 'ok') throw new Error(data.message || '資料載入失敗');
-
-      allRows = data.rows;
-      renderScopeNote(data.outOfScopeConditions);
-      document.getElementById('noCityCount').textContent = data.noCityCount || 0; // 固定值，不隨N天門檻重算
-      document.getElementById('loginGate').style.display = 'none';   // 拿到資料就代表不需要登入頁了，關掉
-      document.getElementById('mainContent').style.display = 'block'; // 外層容器本身也要打開，不然裡面渲染了也看不到
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('dashboard').style.display = 'block';
-      render();
-    } catch (err) {
-      document.getElementById('loading').style.display = 'none';
-      const box = document.getElementById('errorBox');
-      box.style.display = 'block';
-      box.textContent = '載入失敗：' + err.message;
-    }
+    allRows = generateFakeRows();
+    renderScopeNote(FAKE_OUT_OF_SCOPE_CONDITIONS);
+    document.getElementById('noCityCount').textContent = FAKE_NO_CITY_COUNT;
+    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    render();
   }
-
-  // ===== 登入相關 =====
-  function showLoginNotice(type, text) {
-    const el = document.getElementById('loginNotice');
-    el.className = type;
-    el.textContent = text;
-  }
-
-  // 依後端回傳的允許網域清單，動態組出登入頁的說明文字跟輸入框提示，不寫死在 HTML 裡——
-  // 網域之後不管改成幾個、改成什麼，這裡都不用跟著改
-  function renderLoginScopeNote(domains) {
-    const domainsText = (domains && domains.length > 0) ? domains.join('、') : '';
-    const noteEl = document.getElementById('loginScopeNote');
-    if (noteEl) {
-      noteEl.textContent = domainsText
-        ? `僅開放 ${domainsText} 網域帳號使用，輸入 Email 後會寄送驗證碼。`
-        : '輸入 Email 後會寄送驗證碼。';
-    }
-    const inputEl = document.getElementById('loginEmail');
-    if (inputEl) {
-      inputEl.placeholder = domainsText ? `請輸入 ${domainsText} 信箱` : '請輸入您的 Email';
-    }
-  }
-
-  async function sendOtp() {
-    const email = document.getElementById('loginEmail').value.trim();
-    if (!email) { showLoginNotice('error', '請輸入 Email。'); return; }
-
-    const btn = document.getElementById('sendOtpBtn');
-    btn.disabled = true;
-    showLoginNotice('', '');
-    document.getElementById('loginNotice').className = '';
-
-    try {
-      const res = await fetch(`${WEB_APP_URL}?action=sendDashboardOtp&email=${encodeURIComponent(email)}&_=${Date.now()}`, { redirect: 'follow', cache: 'no-store' });
-      const data = await res.json();
-      if (data.status !== 'sent') {
-        showLoginNotice('error', data.message || '發送失敗，請稍後再試。');
-        btn.disabled = false;
-        return;
-      }
-      document.getElementById('otpRow').style.display = 'flex';
-      document.getElementById('loginEmail').disabled = true;
-      showLoginNotice('success', `驗證碼已寄至 ${email}，5 分鐘內有效。`);
-      document.getElementById('loginOtp').focus();
-    } catch (err) {
-      showLoginNotice('error', '發送失敗：' + err.message);
-      btn.disabled = false;
-    }
-  }
-
-  async function verifyOtp() {
-    const email = document.getElementById('loginEmail').value.trim();
-    const otp = document.getElementById('loginOtp').value.trim();
-    if (otp.length !== 6) { showLoginNotice('error', '請輸入 6 位數驗證碼。'); return; }
-
-    const btn = document.getElementById('verifyOtpBtn');
-    btn.disabled = true;
-
-    try {
-      const res = await fetch(`${WEB_APP_URL}?action=verifyDashboardOtp&email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}&_=${Date.now()}`, { redirect: 'follow', cache: 'no-store' });
-      const data = await res.json();
-      if (data.status !== 'ok') {
-        showLoginNotice('error', data.message || '驗證失敗。');
-        btn.disabled = false;
-        return;
-      }
-
-      dashboardToken = data.token;
-      document.getElementById('loginGate').style.display = 'none';
-      document.getElementById('mainContent').style.display = 'block';
-      loadData();
-    } catch (err) {
-      showLoginNotice('error', '驗證失敗：' + err.message);
-      btn.disabled = false;
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') sendOtp(); });
-    document.getElementById('loginOtp').addEventListener('keydown', e => { if (e.key === 'Enter') verifyOtp(); });
-  });
 
   // 依後端回傳的範疇外判斷條件（不限 2 個，且每個欄位可以有各自不同的判斷值），
   // 動態組出頁面頂端的定義說明文字，不寫死在 HTML 裡——欄位跟判斷值之後不管怎麼調，這裡都不用改
