@@ -117,6 +117,7 @@
   }
   .hero-number { font-size: 48px; font-weight: 900; line-height: 1; color: #ff9d7a; }
   .hero-number-total { color: #fff; }
+  .hero-number-today-new { color: #60A5FA; }
   .hero-unit { font-size: 16px; font-weight: 500; color: #c2c0b6; margin-left: 6px; }
   .hero-pct-inline { font-size: 14px; font-weight: 500; color: #c2c0b6; margin-left: 8px; }
   .hero-sub { font-size: 13px; color: #c2c0b6; margin-top: 8px; line-height: 1.5; }
@@ -213,6 +214,11 @@
       <!-- 1. 頂列：左 1/4 主要數字（全部案件／逾期未處理），右 3/4 每日新增案件趨勢圖 -->
       <div class="top-row">
         <div class="hero-main-col">
+          <div>
+            <div class="hero-label">今日新增</div>
+            <div><span class="hero-number hero-number-today-new" id="todayNewCount">0</span><span class="hero-unit">件</span></div>
+          </div>
+          <div class="hero-divider-h"></div>
           <div>
             <div class="hero-label">全部案件</div>
             <div><span class="hero-number hero-number-total" id="totalCount">0</span><span class="hero-unit">件</span></div>
@@ -445,11 +451,19 @@
     const days = Math.max(1, parseInt(document.getElementById('daysInput').value, 10) || 7);
     const stats = computeStats(allRows, days);
     renderHero(stats, days);
+    document.getElementById('todayNewCount').textContent = computeTodayNewCount(allRows);
     renderStatusGrid(stats);
     renderCityBarChart(stats);
     renderCityPieChart(stats);
     renderDailyTrendChart(allRows);
     renderTodayCityStats(allRows);
+  }
+
+  // 今天（Asia/Taipei）新提交的案件數，依 timestamp（提交時間）判斷，跟「今日各縣市處理案件量」
+  // 用的 updateTime（最後更新時間）是不同欄位，這裡是看「今天送出」不是「今天被公會動過」
+  function computeTodayNewCount(rows) {
+    const todayKey = getTaipeiDateKey(new Date());
+    return rows.filter(r => r.timestamp && r.timestamp.slice(0, 10) === todayKey).length;
   }
 
   // 用 Asia/Taipei 時區算「今天是幾號」，不受瀏覽器所在時區影響（例如公會人員如果人在國外開這頁）
