@@ -293,7 +293,6 @@
               ${etaLine}
               <div class="record-city">${escapeHtml(row["CITY"] || "")}</div>
             </div>
-            <span class="status-tag ${statusClass(rawStatus)}">${escapeHtml(statusText)}</span>
           </div>
           ${renderFields(row)}
         </div>`;
@@ -306,10 +305,21 @@
   function renderFields(row) {
     let html = "";
 
-    // 固定欄位（時間戳記已在卡頭顯示，CITY 已在卡頭顯示，處理狀態已用標籤顯示，這裡不重複）
-    ["INTENTION", "無需處理之理由"].forEach(field => {
-      html += fieldRow(FIELD_LABELS[field], row[field]);
-    });
+    // 固定欄位（時間戳記已在卡頭顯示，CITY 已在卡頭顯示）
+    html += fieldRow(FIELD_LABELS["INTENTION"], row["INTENTION"]);
+
+    // 處理狀態原本在卡頭用標籤顯示，這裡搬到內文；「無需處理之理由」有值的話接在標籤後面顯示
+    const rawStatus = row["處理狀態"];
+    const statusText = rawStatus || "尚未處理";
+    const reasonValue = row["無需處理之理由"];
+    const hasReason = reasonValue && String(reasonValue).trim() !== "";
+    html += `
+      <div class="field-row">
+        <div class="field-label">${escapeHtml(FIELD_LABELS["處理狀態"])}</div>
+        <div class="field-value">
+          <span class="status-tag ${statusClass(rawStatus)}">${escapeHtml(statusText)}</span>${hasReason ? `　${escapeHtml(reasonValue)}` : ""}
+        </div>
+      </div>`;
 
     // 「您希望接洽的業者？」因表單分支被拆成 6 個同名欄位，
     // 後端已經合併好只回傳一個值，這裡直接顯示
