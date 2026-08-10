@@ -264,7 +264,16 @@
 <script>
   // 預覽版不連線任何後端，WEB_APP_URL 不需要
 
-  const CHART_COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#2DD4BF'];
+
+  /**
+   * 依「實際出現的縣市總數」動態算顏色，不是從固定的小色票裡循環取用——
+   * 縣市數量不管是 6 個還是 20 幾個，色相永遠平均分散在整個色環上，
+   * 不會因為縣市一多、色票不夠用就繞回去撞色（例如第 7 個縣市撞回第 1 個的顏色）。
+   */
+  function getCityColor(index, total) {
+    const hue = Math.round((360 / Math.max(total, 1)) * index) % 360;
+    return `hsl(${hue}, 55%, 65%)`;
+  }
   const TREND_TOTAL_COLOR = '#334155';
 
   // 「今日各縣市處理案件量」長條圖用的是處理狀態分組，跟縣市是不同維度，配色也分開管理
@@ -476,7 +485,7 @@
       ...citySeries.map((s, i) => ({
         label: s.city,
         data: s.data,
-        borderColor: CHART_COLORS[i % CHART_COLORS.length],
+        borderColor: getCityColor(i, citySeries.length),
         backgroundColor: 'transparent',
         borderWidth: 1.5,
         fill: false,
@@ -696,7 +705,7 @@
       type: 'pie',
       data: {
         labels: cities,
-        datasets: [{ data: totals, backgroundColor: cities.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]) }]
+        datasets: [{ data: totals, backgroundColor: cities.map((_, i) => getCityColor(i, cities.length)) }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
