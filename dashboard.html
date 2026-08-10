@@ -280,7 +280,13 @@
     }
     try {
       const hadToken = !!dashboardToken; // 用來分辨「本來就沒登入過」跟「登入過但過期了」
-      const res = await fetch(`${WEB_APP_URL}?action=dashboard&token=${encodeURIComponent(dashboardToken || '')}`, { redirect: 'follow' });
+      // cache: 'no-store' + 網址帶隨機值：避免瀏覽器把這個請求的回應快取住，
+      // 每次 reload 都保證是真的打到後端拿最新資料，不是吃到舊的快取回應
+      const cacheBuster = Date.now();
+      const res = await fetch(
+        `${WEB_APP_URL}?action=dashboard&token=${encodeURIComponent(dashboardToken || '')}&_=${cacheBuster}`,
+        { redirect: 'follow', cache: 'no-store' }
+      );
       const data = await res.json();
 
       if (data.code === 'AUTH_REQUIRED') {
@@ -341,7 +347,7 @@
     document.getElementById('loginNotice').className = '';
 
     try {
-      const res = await fetch(`${WEB_APP_URL}?action=sendDashboardOtp&email=${encodeURIComponent(email)}`, { redirect: 'follow' });
+      const res = await fetch(`${WEB_APP_URL}?action=sendDashboardOtp&email=${encodeURIComponent(email)}&_=${Date.now()}`, { redirect: 'follow', cache: 'no-store' });
       const data = await res.json();
       if (data.status !== 'sent') {
         showLoginNotice('error', data.message || '發送失敗，請稍後再試。');
@@ -367,7 +373,7 @@
     btn.disabled = true;
 
     try {
-      const res = await fetch(`${WEB_APP_URL}?action=verifyDashboardOtp&email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`, { redirect: 'follow' });
+      const res = await fetch(`${WEB_APP_URL}?action=verifyDashboardOtp&email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}&_=${Date.now()}`, { redirect: 'follow', cache: 'no-store' });
       const data = await res.json();
       if (data.status !== 'ok') {
         showLoginNotice('error', data.message || '驗證失敗。');
