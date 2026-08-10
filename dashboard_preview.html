@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>陳情案件戰情儀表板（假資料預覽）</title>
+<title>寄居蟹及兆基專案協助登記表-戰情儀表板（假資料預覽）</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -127,8 +127,8 @@
     margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border);
     font-size: 12px; color: var(--text-secondary); line-height: 1.9;
   }
+  .footnote-stats > div { margin-bottom: 4px; }
   .footnote-stats strong { color: var(--text-primary); font-weight: 700; font-size: 15px; }
-  .footnote-sep { margin: 0 10px; color: var(--border); }
 
   /* 中區塊：狀態分布 */
   .section-title {
@@ -179,7 +179,7 @@
   <div id="mainContent">
     <header>
       <div>
-        <p class="eyebrow">陳情案件戰情儀表板</p>
+        <p class="eyebrow">寄居蟹及兆基專案協助登記表-戰情儀表板</p>
         <h1>案件處理總覽</h1>
       </div>
       <div class="n-day-control">
@@ -249,9 +249,8 @@
 
       <!-- 5. 次要資訊：不屬於本次處理範圍、排除跳題，縮小當備註 -->
       <div class="footnote-stats">
-        <span>不屬於本次處理範圍：<strong id="outOfScopeCount">0</strong> 件（<span id="outOfScopePct"></span>）－ 非寄居蟹租屋公司房東房客，或非社會住宅包租代管案件</span>
-        <span class="footnote-sep">・</span>
-        <span>排除跳題（無縣市）：<strong id="noCityCount">0</strong> 件 － 一開頭就被排除跳題到問卷結尾，縣市等後續欄位未填寫，不計入以上統計</span>
+        <div>不屬於本次處理範圍：<strong id="outOfScopeCount">0</strong> 件（<span id="outOfScopePct"></span>）－ 非寄居蟹租屋公司房東房客，或非社會住宅包租代管案件</div>
+        <div>排除跳題（無縣市）：<strong id="noCityCount">0</strong> 件 － 一開頭就被排除跳題到問卷結尾，縣市等後續欄位未填寫，不計入以上統計</div>
         <p id="scopeNote" style="margin-top: 8px;"></p>
       </div>
     </div>
@@ -376,7 +375,7 @@
       el.textContent = '範疇外定義：目前沒有設定任何判斷欄位（FIELD_CONFIG 裡找不到 OUT_OF_SCOPE_FIELD_ 開頭的設定）。';
       return;
     }
-    const text = conditions.map(cond => `「${cond.fieldName}」=${cond.value}`).join('，或 ');
+    const text = conditions.map(cond => `【${cond.fieldName}】=${cond.value}`).join('，或 ');
     el.textContent = `範疇外定義：${text}（符合其中一項即列入範疇外）`;
   }
 
