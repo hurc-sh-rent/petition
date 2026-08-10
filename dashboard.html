@@ -699,9 +699,23 @@
     document.getElementById('outOfScopePct').textContent = pct(stats.outOfScopeCount, stats.total);
   }
 
+  // 依 STATUS_COLORS 的鍵值順序固定排列（同一份清單，不用另外維護第二份順序），
+  // 不在清單裡的狀態值（例如業務單位又改了用詞、或還沒對應到色票）排在最後面，彼此再依數量排序
+  function sortStatusEntries(entries) {
+    const order = Object.keys(STATUS_COLORS);
+    return entries.sort((a, b) => {
+      const idxA = order.indexOf(a[0]);
+      const idxB = order.indexOf(b[0]);
+      if (idxA === -1 && idxB === -1) return b[1] - a[1];
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
+  }
+
   function renderStatusGrid(stats) {
     const grid = document.getElementById('statusGrid');
-    const entries = Object.entries(stats.statusCounts).sort((a, b) => b[1] - a[1]);
+    const entries = sortStatusEntries(Object.entries(stats.statusCounts));
 
     if (entries.length === 0) {
       grid.innerHTML = `<div class="status-card"><div class="status-card-name">目前沒有已填寫處理狀態的案件</div></div>`;
