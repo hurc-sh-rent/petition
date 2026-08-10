@@ -252,7 +252,7 @@
     document.getElementById("results").innerHTML = "";
 
     try {
-      const res = await fetch(`${WEB_APP_URL}?action=query&id=${encodeURIComponent(id)}`, { redirect: 'follow' });
+      const res = await fetch(`${WEB_APP_URL}?action=query&id=${encodeURIComponent(id)}&_=${Date.now()}`, { redirect: 'follow', cache: 'no-store' });
       const data = await res.json();
 
       if (data.status !== "ok") {
