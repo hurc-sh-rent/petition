@@ -599,9 +599,12 @@
       const key = r.updateTime.slice(0, 10);
       if (key !== todayKey) return;
 
+      // 有 UPDATE_TIME 但處理狀態是空白，代表公會改過又清掉了（沒有真的處理完），不算今日異動
+      const status = r.status && r.status.trim() ? r.status.trim() : '';
+      if (!status) return;
+
       todayCount++;
       const city = r.city && r.city.trim() ? r.city : '（未填縣市）';
-      const status = r.status && r.status.trim() ? r.status : '（狀態空白）';
       if (!cityStatusMap[city]) cityStatusMap[city] = {};
       cityStatusMap[city][status] = (cityStatusMap[city][status] || 0) + 1;
       statusSet.add(status);
