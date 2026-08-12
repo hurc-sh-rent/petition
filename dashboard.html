@@ -233,8 +233,8 @@
           </div>
         </div>
         <div class="chart-card">
-          <h3>每日新增案件趨勢</h3>
-          <p>近 30 天，依提交時間統計，「全部」為總量，點圖例可切換單一縣市</p>
+          <h3 id="trendChartTitle">每日新增案件趨勢</h3>
+          <p id="trendChartSubtitle">近 30 天，依提交時間統計，「全部」為總量，點圖例可切換單一縣市；點下方日期可看該日每小時趨勢</p>
           <div class="chart-wrap"><canvas id="dailyTrendChart"></canvas></div>
         </div>
       </div>
@@ -248,7 +248,7 @@
       </div>
 
       <!-- 3. 處理狀態分布 -->
-      <div class="section-title">處理狀態分布（已有狀態的案件）</div>
+      <div class="section-title">累計處理狀態分布（已有狀態的案件）</div>
       <div class="status-grid" id="statusGrid"></div>
 
       <!-- 4. 各縣市處理進度＋案件量縣市分布 -->
@@ -314,6 +314,12 @@
   let pieChart = null;
   let trendChart = null;
   let todayChart = null;
+
+  // 每日新增案件趨勢圖的下鑽狀態：'daily' 是近30天檢視，'hourly' 是點了某一天之後的當日每小時檢視
+  let trendViewMode = 'daily';
+  let trendViewDate = null;   // hourly 模式下，目前顯示的是哪一天（yyyy-MM-dd）
+  let trendDateKeys = null;   // daily 模式下，X 軸每個標籤對應的完整日期字串，點擊時用來查表
+  let trendAllRows = [];      // 記住最近一次的完整資料，切換日/時檢視、換日期時都不用重新打 API
 
   async function loadData() {
     if (typeof Chart === 'undefined') {
@@ -538,11 +544,30 @@
       data: dateKeys.map(k => (cityDayCounts[city] && cityDayCounts[city][k]) || 0)
     }));
 
-    return { labels, totalData, citySeries };
+    return { labels, totalData, citySeries, dateKeys };
   }
 
   function renderDailyTrendChart(rows) {
-    const { labels, totalData, citySeries } = computeDailyTrendByCity(rows, 30);
+    trendAllRows = rows; // 記住完整資料，切回日檢視或換一天的時檢視時都要用
+    if (trendViewMode === 'hourly' && trendViewDate) {
+      renderHourlyTrendChartInternal(rows, trendViewDate);
+    } else {
+      renderDailyTrendChartInternal(rows);
+    }
+  }
+
+  function renderDailyTrendChartInternal(rows) {
+    trendViewMode = 'daily';
+    trendViewDate = null;
+    trendDateKeys = null;
+
+    const { labels, totalData, citySeries, dateKeys } = computeDailyTrendByCity(rows, 30);
+    trendDateKeys = dateKeys; // 點擊 X 軸標籤時，用這個陣列把「第幾個標籤」換回完整日期字串
+
+    document.getElementById('trendChartTitle').textContent = '每日新增案件趨勢';
+    document.getElementById('trendChartSubtitle').textContent =
+      '近 30 天，依提交時間統計，「全部」為總量，點圖例可切換單一縣市；點下方日期可看該日每小時趨勢';
+
     if (trendChart) trendChart.destroy();
 
     const datasets = [
@@ -574,6 +599,8 @@
       data: { labels: labels, datasets: datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
+        onClick: handleTrendChartClick,
+        onHover: handleTrendChartHover,
         scales: {
           y: { beginAtZero: true, ticks: { precision: 0 } },
           x: { grid: { display: false } }
@@ -581,6 +608,134 @@
         plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } } }
       }
     });
+  }
+
+  /**
+   * 依「小時」分組，統計某一天（dateKey，格式 yyyy-MM-dd）24 小時各自新增幾筆案件，
+   * 邏輯跟 computeDailyTrendByCity 幾乎一樣，只是分組單位從「天」換成「時」。
+   */
+  function computeHourlyTrendByCity(rows, dateKey) {
+    const totalCounts = {}; // { 'HH': count }
+    const cityHourCounts = {}; // { city: { 'HH': count } }
+    const citiesSet = new Set();
+
+    rows.forEach(r => {
+      if (!r.timestamp || r.timestamp.slice(0, 10) !== dateKey) return;
+      const hour = r.timestamp.slice(11, 13); // 'yyyy-MM-ddTHH:mm:ss' 的第 12-13 碼是小時
+      totalCounts[hour] = (totalCounts[hour] || 0) + 1;
+
+      const city = r.city && r.city.trim() ? r.city : '（未填縣市）';
+      citiesSet.add(city);
+      if (!cityHourCounts[city]) cityHourCounts[city] = {};
+      cityHourCounts[city][hour] = (cityHourCounts[city][hour] || 0) + 1;
+    });
+
+    const labels = [];
+    const hourKeys = [];
+    for (let h = 0; h < 24; h++) {
+      const key = String(h).padStart(2, '0');
+      hourKeys.push(key);
+      labels.push(key + '時');
+    }
+
+    const totalData = hourKeys.map(k => totalCounts[k] || 0);
+
+    const cities = Array.from(citiesSet).sort((a, b) => {
+      const totalA = Object.values(cityHourCounts[a]).reduce((s, v) => s + v, 0);
+      const totalB = Object.values(cityHourCounts[b]).reduce((s, v) => s + v, 0);
+      return totalB - totalA;
+    });
+
+    const citySeries = cities.map(city => ({
+      city,
+      data: hourKeys.map(k => (cityHourCounts[city] && cityHourCounts[city][k]) || 0)
+    }));
+
+    return { labels, totalData, citySeries };
+  }
+
+  function renderHourlyTrendChartInternal(rows, dateKey) {
+    trendViewMode = 'hourly';
+    trendViewDate = dateKey;
+
+    const { labels, totalData, citySeries } = computeHourlyTrendByCity(rows, dateKey);
+
+    document.getElementById('trendChartTitle').textContent = `${dateKey} 每小時新增案件`;
+    document.getElementById('trendChartSubtitle').innerHTML =
+      `依提交時間統計，「全部」為總量，點圖例可切換單一縣市；<a href="#" onclick="event.preventDefault(); backToDailyTrendView();" style="color:var(--accent); text-decoration:underline; cursor:pointer;">← 回到近 30 天檢視</a>`;
+
+    if (trendChart) trendChart.destroy();
+
+    const datasets = [
+      {
+        label: '全部',
+        data: totalData,
+        borderColor: TREND_TOTAL_COLOR,
+        backgroundColor: 'transparent',
+        borderWidth: 3,
+        borderDash: [7, 4],
+        fill: false,
+        tension: 0.3,
+        pointRadius: 2
+      },
+      ...citySeries.map((s, i) => ({
+        label: s.city,
+        data: s.data,
+        borderColor: getCityColor(i, citySeries.length),
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        fill: false,
+        tension: 0.3,
+        pointRadius: 1
+      }))
+    ];
+
+    trendChart = new Chart(document.getElementById('dailyTrendChart'), {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } },
+          x: { grid: { display: false } }
+        },
+        plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } } }
+      }
+    });
+  }
+
+  /** 「← 回到近 30 天檢視」連結會呼叫這個，切回日檢視，用記住的 trendAllRows 重畫 */
+  function backToDailyTrendView() {
+    renderDailyTrendChartInternal(trendAllRows || []);
+  }
+
+  /**
+   * 只有日檢視（trendViewMode === 'daily'）才需要處理點擊：判斷使用者是不是點在 X 軸標籤
+   * （日期文字）那一排，不是點在圖表資料本身。用 chart.scales.x 的座標範圍判斷點擊位置，
+   * 命中的話取得對應的完整日期字串（trendDateKeys 裡對應同一個 index），切到那一天的時檢視。
+   */
+  function handleTrendChartClick(evt) {
+    if (trendViewMode !== 'daily' || !trendChart || !trendDateKeys) return;
+
+    // 用 Chart.js 官方內建的方法找出「點的位置最靠近哪一個資料索引（哪一天）」，
+    // 不用自己算像素邊界（那個做法太脆弱，容易因為版面配置對不準，導致永遠判斷不到）。
+    // 點在那一天對應的整條直欄範圍內都算數，不用精準點在標籤文字上。
+    const points = trendChart.getElementsAtEventForMode(evt, 'index', { intersect: false }, true);
+    if (!points || points.length === 0) return;
+
+    const index = points[0].index;
+    const dateKey = trendDateKeys[index];
+    if (!dateKey) return;
+
+    renderHourlyTrendChartInternal(trendAllRows || [], dateKey);
+  }
+
+  /** 滑鼠移到 X 軸標籤範圍時，游標變成手指，讓使用者知道這裡可以點 */
+  function handleTrendChartHover(evt) {
+    if (trendViewMode !== 'daily' || !trendChart) return;
+    // 跟點擊判斷用同一套邏輯：滑鼠所在位置能不能找到對應的資料索引，能就顯示手指游標
+    const points = trendChart.getElementsAtEventForMode(evt, 'index', { intersect: false }, true);
+    evt.native.target.style.cursor = (points && points.length > 0) ? 'pointer' : 'default';
   }
 
   /**
