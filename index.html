@@ -245,6 +245,7 @@
     const id = document.getElementById("idInput").value.trim().toUpperCase();
     clearNotice();
     if (!id) { showNotice("error", "請輸入身分證字號。"); return; }
+    if (id.length !== 10) { showNotice("error", "請輸入完整的10碼身分證字號。"); return; }
 
     const btn = document.getElementById("queryBtn");
     btn.disabled = true;
