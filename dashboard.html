@@ -161,11 +161,53 @@
 
   footer { margin-top: 40px; text-align: center; font-size: 12px; color: var(--text-secondary); }
 
+  /* ===== 案件階段追蹤與卡關示警 ===== */
+  .section-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .stage-total-warn-pill {
+    font-size: 12px; font-weight: 700; color: var(--error);
+    background: var(--error-light); padding: 3px 12px; border-radius: 20px;
+  }
+  .stage-total-warn-pill.zero { color: var(--success); background: var(--success-light); }
+  .stage-flow-card p.stage-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6; }
+  .stage-start-row { margin-bottom: 20px; }
+  .stage-lane { margin-bottom: 20px; }
+  .stage-lane:last-child { margin-bottom: 0; }
+  .stage-lane-label {
+    font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .stage-lane-tag {
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
+    background: var(--tag-bg); color: var(--text-secondary); padding: 2px 8px; border-radius: 10px;
+  }
+  .stage-lane-row { display: flex; align-items: stretch; gap: 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .stage-arrow { display: flex; align-items: center; justify-content: center; padding: 0 6px; color: var(--text-secondary); font-size: 16px; flex: 0 0 auto; }
+  .stage-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; min-width: 148px; max-width: 180px; flex: 0 0 auto; position: relative;
+  }
+  .stage-card.terminal { background: var(--success-light); border-color: #bfe3cd; }
+  .stage-card.stage-start { background: #fff; min-width: 220px; max-width: 320px; }
+  .stage-step {
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
+    color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;
+  }
+  .stage-name { font-size: 12.5px; margin-bottom: 8px; line-height: 1.4; min-height: 2.6em; }
+  .stage-count { font-size: 22px; font-weight: 700; }
+  .stage-count .stage-unit { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-left: 3px; }
+  .stage-warn {
+    display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 600;
+    color: var(--error); background: var(--error-light); padding: 2px 8px; border-radius: 12px;
+  }
+  .stage-unknown-note { margin-top: 14px; font-size: 12px; color: var(--text-secondary); }
+
   @media (max-width: 760px) {
     .chart-row { grid-template-columns: 1fr; }
     .top-row { flex-direction: column; }
     .hero-main-col { flex: 0 0 auto; max-width: 100%; }
     .chart-wrap { height: 240px; }
+    .stage-lane-row { flex-wrap: wrap; overflow-x: visible; }
+    .stage-arrow { transform: rotate(90deg); padding: 4px 0; flex-basis: 100%; justify-content: center; }
   }
 </style>
 </head>
@@ -239,6 +281,28 @@
         </div>
       </div>
 
+      <!-- 1.5 案件階段追蹤與卡關示警 -->
+      <div class="section-title section-title-row">
+        <span>案件階段追蹤與卡關示警</span>
+        <span class="stage-total-warn-pill" id="stageWarnPill">⚠ 目前卡關 <strong id="stageWarnTotal">0</strong> 件</span>
+      </div>
+      <div class="chart-card stage-flow-card">
+        <p class="stage-desc">依「處理狀態」遞移規則追蹤每筆案件目前所在階段；非結案狀態超過 <strong id="stageWarningDaysText">2</strong> 天沒有更新（處理狀態未再往下一步移動）即列入卡關示警，已結案的案件不計入。</p>
+
+        <div class="stage-start-row">
+          <div class="stage-card stage-start">
+            <div class="stage-step">START</div>
+            <div class="stage-name">尚未開始處理（處理狀態空白）</div>
+            <div class="stage-count"><span id="stageStartCount">0</span><span class="stage-unit">件</span></div>
+            <span class="stage-warn" id="stageStartWarnBadge" style="display:none;">⚠ <span id="stageStartWarn">0</span> 件已逾期未開始</span>
+          </div>
+        </div>
+
+        <div id="stageFlow"></div>
+
+        <p class="stage-unknown-note" id="stageUnknownNote"></p>
+      </div>
+
       <!-- 2. 今日各縣市處理案件量 -->
       <div class="section-title">今日各縣市處理案件量</div>
       <div class="chart-card">
@@ -293,19 +357,162 @@
   }
   const TREND_TOTAL_COLOR = '#334155';
 
-  // 「今日各縣市處理案件量」長條圖用的是處理狀態分組，跟縣市是不同維度，配色也分開管理
-  const STATUS_COLORS = {
-    '聯繫中': '#FBBF24',
-    '轉介中': '#FB923C',
-    '已轉介指定業者': '#818CF8',
-    '已轉介輪派業者': '#C084FC',
-    '無需處理/結案': '#94A3B8'
+  /**
+   * ===== 處理狀態遞移規則（狀態機） =====
+   * start -> 1 或 2 -> 3 -> 4 -> 5 -> 6 -> 7（結案，超過2天要示警）
+   * start -> 1 或 2 -> 3 -> 12（結案，超過2天要示警）── 業者接洽中若失敗，從第3步直接分支結案
+   * start -> 8（結案）
+   * start -> 9（結案）
+   * start -> 10 -> 11（結案）
+   * terminal=true 的狀態代表案件已結案，不會再有下一步，也不列入卡關示警判斷。
+   */
+  const STATUS_STAGE_ORDER = [
+    { key: '公會已轉指定業者',     step: 1,  path: 'A',  terminal: false },
+    { key: '公會已輪配業者',       step: 2,  path: 'A',  terminal: false },
+    { key: '業者接洽中',           step: 3,  path: 'A',  terminal: false },
+    { key: '業者取得意向書',       step: 4,  path: 'A',  terminal: false },
+    { key: '公會提供業者資料',     step: 5,  path: 'A',  terminal: false },
+    { key: '公會辦理原租約終止',   step: 6,  path: 'A',  terminal: false },
+    { key: '業者完成新案(結案)',   step: 7,  path: 'A',  terminal: true  },
+    { key: '業者接洽失敗(結案)',   step: 12, path: 'A2', terminal: true  },
+    { key: '公會已回覆結案(結案)', step: 8,  path: 'B',  terminal: true  },
+    { key: '資料不全無法處理(結案)', step: 9, path: 'C', terminal: true  },
+    { key: '移請住都中心回覆',     step: 10, path: 'D',  terminal: false },
+    { key: '中心回覆完成(結案)',   step: 11, path: 'D',  terminal: true  }
+  ];
+  const STATUS_STAGE_MAP = {};
+  STATUS_STAGE_ORDER.forEach(s => { STATUS_STAGE_MAP[s.key] = s; });
+
+  const PATH_LABELS = {
+    A: '主流程・業者媒合結案',
+    A2: '業者接洽中止（自 STEP 3 分支結案）',
+    B: '公會逕行結案',
+    C: '資料不全結案',
+    D: '移請住都中心處理'
   };
-  // 沒對應到上面清單的狀態值（例如業務單位又改了用詞），用這組備援色，不會沒有顏色可用
+
+  const STAGE_WARNING_DAYS = 2; // 非結案狀態超過幾天沒更新（沒再往下一步移動）就示警
+
+  // 「今日各縣市處理案件量」長條圖用的是處理狀態分組，跟縣市是不同維度，配色沿用階段順序自動產生，
+  // 同一階段在兩張圖（今日異動 / 累計分布）顏色一致，方便對照
+  const STATUS_COLORS = {};
+  STATUS_STAGE_ORDER.forEach((s, i) => {
+    // 依路徑分色系：A 主流程走藍→琥珀漸層並以綠色收斂成功結案，A2（業者接洽失敗）用紅色標示負向結果，
+    // B/C 走中性色，D 走紫色系
+    const PATH_COLOR_SCALES = {
+      A: ['#93C5FD', '#60A5FA', '#FBBF24', '#FB923C', '#F472B6', '#A78BFA', '#34D399'],
+      A2: ['#F87171'],
+      B: ['#10B981'],
+      C: ['#94A3B8'],
+      D: ['#818CF8', '#6366F1']
+    };
+    const scale = PATH_COLOR_SCALES[s.path];
+    const idxInPath = STATUS_STAGE_ORDER.filter(x => x.path === s.path).indexOf(s);
+    STATUS_COLORS[s.key] = scale[idxInPath] || scale[scale.length - 1];
+  });
+  // 沒對應到上面 12 個階段的狀態值（例如舊版留下的狀態文字），用這組備援色，不會沒有顏色可用
   const STATUS_FALLBACK_COLORS = ['#60A5FA', '#34D399', '#F87171', '#2DD4BF'];
   function getStatusColor(status, fallbackIndex) {
     if (STATUS_COLORS[status]) return STATUS_COLORS[status];
     return STATUS_FALLBACK_COLORS[fallbackIndex % STATUS_FALLBACK_COLORS.length];
+  }
+
+  /** 距今幾天（含小數），日期字串解析失敗回傳 null */
+  function daysSince(dateStr) {
+    if (!dateStr) return null;
+    const t = new Date(dateStr).getTime();
+    if (isNaN(t)) return null;
+    return (Date.now() - t) / 86400000;
+  }
+
+  /**
+   * 依處理狀態遞移規則統計每個階段目前有幾筆案件、其中幾筆已經卡關：
+   * - 處理狀態空白 → 歸到虛擬的「尚未開始（start）」桶，用「時間戳記」（提交時間）算天數
+   * - 處理狀態對應到 12 個定義階段之一 → 歸到該階段；若非結案狀態，優先用「STATUS_UPDATE_TIME」
+   *   （處理狀態這個欄位本身最後一次真的變更數值的時間）算天數；後端如果還沒加這個欄位、
+   *   或這筆案件的處理狀態從未變更過而拿不到值，才退回用「UPDATE_TIME」（三個公會可編輯欄位
+   *   任一被動到就更新，精確度較低——例如只改了「公會指定業者」也會讓它看起來像剛更新過）
+   * - 處理狀態文字對不到任何定義階段（例如舊版狀態值）→ 計入 unknownCount，不參與卡關判斷，
+   *   避免因為文字對不上就被誤判成「卡關」
+   */
+  function computeStageStats(rows) {
+    const stageCounts = {}; // stageKey（或 '__start__'）-> { count, warnCount }
+    const ensure = key => (stageCounts[key] || (stageCounts[key] = { count: 0, warnCount: 0 }));
+    let unknownCount = 0;
+
+    rows.forEach(r => {
+      const status = (r.status || '').trim();
+
+      if (!status) {
+        const bucket = ensure('__start__');
+        bucket.count++;
+        const age = daysSince(r.timestamp);
+        if (age !== null && age >= STAGE_WARNING_DAYS) bucket.warnCount++;
+        return;
+      }
+
+      const stage = STATUS_STAGE_MAP[status];
+      if (!stage) { unknownCount++; return; }
+
+      const bucket = ensure(status);
+      bucket.count++;
+      if (!stage.terminal) {
+        // 優先用「處理狀態」自己的變更時間；沒有才退回用整列的最後更新時間
+        const referenceTime = r.statusUpdateTime || r.updateTime;
+        const age = daysSince(referenceTime);
+        if (age !== null && age >= STAGE_WARNING_DAYS) bucket.warnCount++;
+      }
+    });
+
+    return { stageCounts, unknownCount };
+  }
+
+  function renderStageFlow(rows) {
+    const { stageCounts, unknownCount } = computeStageStats(rows);
+
+    const startBucket = stageCounts['__start__'] || { count: 0, warnCount: 0 };
+    document.getElementById('stageStartCount').textContent = startBucket.count;
+    document.getElementById('stageStartWarn').textContent = startBucket.warnCount;
+    document.getElementById('stageStartWarnBadge').style.display = startBucket.warnCount > 0 ? 'inline-block' : 'none';
+
+    let totalWarn = startBucket.warnCount;
+    Object.keys(stageCounts).forEach(k => { if (k !== '__start__') totalWarn += stageCounts[k].warnCount; });
+
+    const pill = document.getElementById('stageWarnPill');
+    document.getElementById('stageWarnTotal').textContent = totalWarn;
+    pill.classList.toggle('zero', totalWarn === 0);
+    pill.innerHTML = totalWarn > 0
+      ? `⚠ 目前卡關 <strong id="stageWarnTotal">${totalWarn}</strong> 件`
+      : `✓ 目前沒有卡關案件`;
+
+    const laneOrder = ['A', 'A2', 'B', 'C', 'D'];
+    const container = document.getElementById('stageFlow');
+    container.innerHTML = laneOrder.map(p => {
+      const stages = STATUS_STAGE_ORDER.filter(s => s.path === p);
+      const cards = stages.map(s => {
+        const bucket = stageCounts[s.key] || { count: 0, warnCount: 0 };
+        const warnBadge = (!s.terminal && bucket.warnCount > 0)
+          ? `<span class="stage-warn">⚠ ${bucket.warnCount} 件已逾 ${STAGE_WARNING_DAYS} 天</span>`
+          : '';
+        return `
+          <div class="stage-card ${s.terminal ? 'terminal' : ''}">
+            <div class="stage-step">STEP ${s.step}${s.terminal ? ' ・結案' : ''}</div>
+            <div class="stage-name">${escapeHtml(s.key)}</div>
+            <div class="stage-count">${bucket.count}<span class="stage-unit">件</span></div>
+            ${warnBadge}
+          </div>`;
+      }).join('<div class="stage-arrow">→</div>');
+
+      return `
+        <div class="stage-lane">
+          <div class="stage-lane-label"><span class="stage-lane-tag">路徑 ${p}</span>${escapeHtml(PATH_LABELS[p])}</div>
+          <div class="stage-lane-row">${cards}</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('stageUnknownNote').textContent = unknownCount > 0
+      ? `另有 ${unknownCount} 件案件的處理狀態文字，對不到目前定義的 12 個階段（可能是舊版狀態值或尚未同步的自訂文字），未計入以上卡關統計。`
+      : '';
   }
 
   let dashboardToken = null; // 只存在記憶體，重新整理頁面就要重新登入
@@ -471,6 +678,7 @@
     renderCityPieChart(stats);
     renderDailyTrendChart(allRows);
     renderTodayCityStats(allRows);
+    renderStageFlow(allRows);
   }
 
   // 今天（Asia/Taipei）新提交的案件數，依 timestamp（提交時間）判斷，跟「今日各縣市處理案件量」
