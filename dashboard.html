@@ -188,6 +188,19 @@
   }
   .stage-card.terminal { background: var(--success-light); border-color: #bfe3cd; }
   .stage-card.stage-start { background: #fff; min-width: 220px; max-width: 320px; }
+  /* 「擇一起始」合流群組：STEP1、STEP2 上下疊放在同一個虛線框裡，代表兩者是平行的
+     起始選項、不是先後順序，整組只接一個箭頭到下一步 */
+  .stage-merge-group {
+    display: flex; flex-direction: column; gap: 4px; align-items: stretch;
+    border: 1px dashed var(--border); border-radius: 12px; padding: 8px;
+    background: #fbfbf9; min-width: 148px; max-width: 180px; flex: 0 0 auto;
+  }
+  .stage-merge-label {
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.05em;
+    color: var(--text-secondary); text-align: center; text-transform: uppercase; margin-bottom: 2px;
+  }
+  .stage-merge-or { text-align: center; font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+  .stage-merge-group .stage-card { min-width: 100%; max-width: 100%; }
   .stage-step {
     font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
     color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;
@@ -467,6 +480,20 @@
     return { stageCounts, unknownCount };
   }
 
+  /** 組出單一階段卡片的 HTML（給 renderStageFlow 共用） */
+  function buildStageCardHtml(s, bucket) {
+    const warnBadge = (!s.terminal && bucket.warnCount > 0)
+      ? `<span class="stage-warn">⚠ ${bucket.warnCount} 件已逾 ${STAGE_WARNING_DAYS} 天</span>`
+      : '';
+    return `
+      <div class="stage-card ${s.terminal ? 'terminal' : ''}">
+        <div class="stage-step">STEP ${s.step}${s.terminal ? ' ・結案' : ''}</div>
+        <div class="stage-name">${escapeHtml(s.key)}</div>
+        <div class="stage-count">${bucket.count}<span class="stage-unit">件</span></div>
+        ${warnBadge}
+      </div>`;
+  }
+
   function renderStageFlow(rows) {
     const { stageCounts, unknownCount } = computeStageStats(rows);
 
@@ -489,24 +516,37 @@
     const container = document.getElementById('stageFlow');
     container.innerHTML = laneOrder.map(p => {
       const stages = STATUS_STAGE_ORDER.filter(s => s.path === p);
-      const cards = stages.map(s => {
-        const bucket = stageCounts[s.key] || { count: 0, warnCount: 0 };
-        const warnBadge = (!s.terminal && bucket.warnCount > 0)
-          ? `<span class="stage-warn">⚠ ${bucket.warnCount} 件已逾 ${STAGE_WARNING_DAYS} 天</span>`
-          : '';
-        return `
-          <div class="stage-card ${s.terminal ? 'terminal' : ''}">
-            <div class="stage-step">STEP ${s.step}${s.terminal ? ' ・結案' : ''}</div>
-            <div class="stage-name">${escapeHtml(s.key)}</div>
-            <div class="stage-count">${bucket.count}<span class="stage-unit">件</span></div>
-            ${warnBadge}
+      const getBucket = s => stageCounts[s.key] || { count: 0, warnCount: 0 };
+
+      let cardsHtml;
+      if (p === 'A') {
+        // STEP 1「公會已轉指定業者」跟 STEP 2「公會已輪配業者」是兩個平行的起始選項
+        // （民眾自己指定業者走 1、公會輪派走 2），不是「先 1 再 2」的順序關係，兩者都會
+        // 各自接到 STEP 3。畫成一般的橫向卡片＋箭頭會讓人誤以為是 1→2→3 依序發生，
+        // 所以這裡改成「並列合流」的樣式：1、2 上下疊放在同一個虛線框裡、中間標「或」，
+        // 整組只用一個箭頭接到 STEP 3，STEP 3 之後才是真正依序發生的 3→4→5→6→7
+        const step1 = stages.find(s => s.step === 1);
+        const step2 = stages.find(s => s.step === 2);
+        const restStages = stages.filter(s => s.step !== 1 && s.step !== 2); // 3,4,5,6,7
+
+        const mergeGroupHtml = `
+          <div class="stage-merge-group">
+            <div class="stage-merge-label">擇一起始</div>
+            ${buildStageCardHtml(step1, getBucket(step1))}
+            <div class="stage-merge-or">或</div>
+            ${buildStageCardHtml(step2, getBucket(step2))}
           </div>`;
-      }).join('<div class="stage-arrow">→</div>');
+        const restCardsHtml = restStages.map(s => buildStageCardHtml(s, getBucket(s))).join('<div class="stage-arrow">→</div>');
+
+        cardsHtml = mergeGroupHtml + '<div class="stage-arrow">→</div>' + restCardsHtml;
+      } else {
+        cardsHtml = stages.map(s => buildStageCardHtml(s, getBucket(s))).join('<div class="stage-arrow">→</div>');
+      }
 
       return `
         <div class="stage-lane">
           <div class="stage-lane-label"><span class="stage-lane-tag">路徑 ${p}</span>${escapeHtml(PATH_LABELS[p])}</div>
-          <div class="stage-lane-row">${cards}</div>
+          <div class="stage-lane-row">${cardsHtml}</div>
         </div>`;
     }).join('');
 
@@ -561,6 +601,7 @@
       allRows = data.rows;
       renderScopeNote(data.outOfScopeConditions);
       document.getElementById('noCityCount').textContent = data.noCityCount || 0; // 固定值，不隨N天門檻重算
+
       document.getElementById('loginGate').style.display = 'none';   // 拿到資料就代表不需要登入頁了，關掉
       document.getElementById('mainContent').style.display = 'block'; // 外層容器本身也要打開，不然裡面渲染了也看不到
       document.getElementById('loading').style.display = 'none';

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>寄居蟹及兆基專案協助登記表-戰情儀表板（假資料預覽）</title>
+<title>寄居蟹及兆基專案協助登記表-戰情儀表板</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -82,24 +82,11 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
     padding: 24px; max-width: 480px;
   }
-  .login-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-  .login-row input {
-    flex: 1; padding: 12px 14px; font-family: 'Noto Sans TC', sans-serif; font-size: 14px;
-    border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
-    color: var(--text-primary); outline: none;
+  .notice {
+    display: block; font-size: 13px; padding: 10px 14px; border-radius: 8px;
   }
-  .login-row input:focus { border-color: var(--accent); }
-  .login-row button {
-    padding: 12px 20px; background: var(--accent); color: #fff; font-family: 'Noto Sans TC', sans-serif;
-    font-size: 14px; font-weight: 500; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap;
-  }
-  .login-row button:hover { background: #1e4a91; }
-  .login-row button:disabled { background: #a0b4d4; cursor: not-allowed; }
-  #loginNotice {
-    display: none; font-size: 13px; padding: 10px 14px; border-radius: 8px; margin-top: 4px;
-  }
-  #loginNotice.error { display: block; background: var(--error-light); color: var(--error); }
-  #loginNotice.success { display: block; background: var(--success-light); color: var(--success); }
+  .notice.error { background: var(--error-light); color: var(--error); }
+  .notice.success { background: var(--success-light); color: var(--success); }
 
   /* 頂列：左1/4 主要數字，右3/4 每日新增趨勢圖 */
   .top-row { display: flex; gap: 20px; margin-bottom: 20px; align-items: stretch; }
@@ -161,7 +148,7 @@
 
   footer { margin-top: 40px; text-align: center; font-size: 12px; color: var(--text-secondary); }
 
-  /* ===== 公會範圍標籤（依 ?guild= 網址參數顯示目前看的是哪個公會） ===== */
+  /* ===== 公會範圍標籤（顯示目前這個專屬連結對應哪個公會） ===== */
   .guild-scope-badge {
     display: inline-block; vertical-align: middle; margin-left: 10px;
     font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600;
@@ -234,11 +221,19 @@
 <body>
 <div class="container">
 
-  <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:10px; padding:12px 18px; margin-bottom:20px; font-size:13px; color:#92400e;">
-    ⚠️ 這是<strong>假資料預覽版</strong>，所有數字都是隨機產生，不是真實案件資料，也不會連線到後端 API，純粹讓你看排版跟圖表效果。
+  <div id="guildMissing" style="display:none;">
+    <header>
+      <div>
+        <p class="eyebrow">寄居蟹及兆基專案協助登記表-戰情儀表板</p>
+        <h1>找不到公會連結</h1>
+      </div>
+    </header>
+    <div class="login-box">
+      <div id="guildMissingNotice" class="notice error">請使用您所屬公會收到的專屬連結開啟本頁面。</div>
+    </div>
   </div>
 
-  <div id="mainContent">
+  <div id="mainContent" style="display:none;">
     <header>
       <div>
         <p class="eyebrow">寄居蟹及兆基專案協助登記表-戰情儀表板</p>
@@ -277,8 +272,8 @@
           </div>
         </div>
         <div class="chart-card">
-          <h3>每日新增案件趨勢</h3>
-          <p>近 30 天，依提交時間統計，「全部」為總量，點圖例可切換單一縣市</p>
+          <h3 id="trendChartTitle">每日新增案件趨勢</h3>
+          <p id="trendChartSubtitle">近 30 天，依提交時間統計，「全部」為總量，點圖例可切換單一縣市；點下方日期可看該日每小時趨勢</p>
           <div class="chart-wrap"><canvas id="dailyTrendChart"></canvas></div>
         </div>
       </div>
@@ -314,7 +309,7 @@
       </div>
 
       <!-- 3. 處理狀態分布 -->
-      <div class="section-title">處理狀態分布（已有狀態的案件）</div>
+      <div class="section-title">累計處理狀態分布（已有狀態的案件）</div>
       <div class="status-grid" id="statusGrid"></div>
 
       <!-- 4. 各縣市處理進度＋案件量縣市分布 -->
@@ -334,7 +329,7 @@
       <!-- 5. 次要資訊：不屬於本次處理範圍、排除跳題，縮小當備註 -->
       <div class="footnote-stats">
         <div>不屬於本次處理範圍：<strong id="outOfScopeCount">0</strong> 件（<span id="outOfScopePct"></span>）－ 非寄居蟹租屋公司房東房客，或非社會住宅包租代管案件</div>
-        <div id="noCityStatLine">排除跳題（無縣市）：<strong id="noCityCount">0</strong> 件 － 一開頭就被排除跳題到問卷結尾，縣市等後續欄位未填寫，不計入以上統計</div>
+        <!-- 排除跳題（無縣市）統計在單一公會視角下沒有意義（案件連縣市都沒填就不屬於任何公會），移除不顯示 -->
         <p id="scopeNote" style="margin-top: 8px;"></p>
       </div>
     </div>
@@ -345,7 +340,7 @@
 </div>
 
 <script>
-  // 預覽版不連線任何後端，WEB_APP_URL 不需要
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxQ0HC8vVMFoNagqvfKwxzMr560dO2HCpd02JxYe1tajazQ_be74H__R-jDRcL_Fsr6Rg/exec";
 
 
   /**
@@ -544,111 +539,30 @@
       : '';
   }
 
-  // 預覽版不需要登入 token
+  // 從網址 ?guild=權杖 讀取這個連結對應哪個公會；info.html 每一份連結都是固定給某一個
+  // 公會用的，不會有切換公會的情境，所以頁面載入時讀一次就好，不用像 dashboard.html
+  // 那樣處理登入狀態的變化
+  const GUILD_TOKEN = new URLSearchParams(window.location.search).get('guild') || '';
+
   let allRows = [];
   let barChart = null;
   let pieChart = null;
   let trendChart = null;
   let todayChart = null;
 
-  // ===== 假資料產生器（純前端，不打任何 API） =====
-  const FAKE_CITIES = ['北北基宜', '桃竹苗', '中彰投', '雲嘉南', '高屏澎', '花東金馬'];
-  // 狀態值直接沿用 STATUS_STAGE_ORDER（12 個階段的定義），非結案階段給比較高的權重，
-  // 才會有足夠的「進行中」案件可以示範卡關示警；終點（結案）階段權重較低，比較貼近實務上
-  // 「多數案件卡在中間某一步」的分布，而不是均勻分布在 12 個狀態上
-  const FAKE_STATUS_POOL = STATUS_STAGE_ORDER.map(s => ({ key: s.key, weight: s.terminal ? 1 : 3 }));
-  const FAKE_OUT_OF_SCOPE_CONDITIONS = [
-    { fieldName: '您是否為寄居蟹租屋公司受理服務之房東、房客?', value: '否' },
-    { fieldName: '您的案件是否屬於「社會住宅包租代管」案件？', value: '否' }
-  ];
-  const FAKE_NO_CITY_COUNT = 14;
-
-  function fakeFormatDate(d) {
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  }
-
-  /** 依權重隨機抽一個狀態文字，terminal=false 的階段抽中機率較高 */
-  function pickWeightedStatus() {
-    const totalWeight = FAKE_STATUS_POOL.reduce((s, x) => s + x.weight, 0);
-    let r = Math.random() * totalWeight;
-    for (const item of FAKE_STATUS_POOL) {
-      r -= item.weight;
-      if (r <= 0) return item.key;
-    }
-    return FAKE_STATUS_POOL[FAKE_STATUS_POOL.length - 1].key;
-  }
-
-  function generateFakeRows() {
-    const rows = [];
-    const now = new Date();
-
-    for (let i = 0; i < 240; i++) {
-      const city = FAKE_CITIES[Math.floor(Math.random() * FAKE_CITIES.length)];
-      const daysAgo = Math.floor(Math.random() * 30);
-      const submittedAt = new Date(now.getTime() - daysAgo * 86400000 - Math.floor(Math.random() * 24) * 3600000);
-      const outOfScope = Math.random() < 0.07;
-
-      // 讓一部分案件維持空白（尚未開始處理），才會有「尚未開始」桶可以看
-      let status = Math.random() < 0.18 ? '' : pickWeightedStatus();
-      const stageMeta = STATUS_STAGE_MAP[status];
-
-      let updateTime = '';
-      let statusUpdateTime = '';
-      if (status) {
-        const roll = Math.random();
-        if (stageMeta && !stageMeta.terminal && roll < 0.3) {
-          // 情境 A：處理狀態本身就卡住 2～6 天沒變，updateTime 與 statusUpdateTime 相同，
-          // 示範案件階段追蹤區塊的卡關示警
-          const stuckDays = 2 + Math.random() * 4;
-          const stuckAt = new Date(now.getTime() - stuckDays * 86400000);
-          const stuckStr = fakeFormatDate(stuckAt < submittedAt ? submittedAt : stuckAt);
-          updateTime = stuckStr;
-          statusUpdateTime = stuckStr;
-        } else if (stageMeta && !stageMeta.terminal && roll < 0.55) {
-          // 情境 B：處理狀態其實已經卡住了，但公會今天動了別的可編輯欄位（例如補了「公會指定
-          // 業者」），讓 UPDATE_TIME 變成今天，但處理狀態本身沒有真的往下一步移動——這正是
-          // STATUS_UPDATE_TIME 欄位要解決的情境：只看 UPDATE_TIME 的話，這筆案件會被誤判成
-          // 「今天才更新、還不算卡關」
-          const statusStuckDays = 2 + Math.random() * 5;
-          const statusStuckAt = new Date(now.getTime() - statusStuckDays * 86400000);
-          statusUpdateTime = fakeFormatDate(statusStuckAt < submittedAt ? submittedAt : statusStuckAt);
-          const t = new Date();
-          t.setHours(8 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 60), 0, 0);
-          updateTime = fakeFormatDate(t);
-        } else if (roll < 0.75) {
-          // 情境 C：處理狀態剛好也是今天變更的（正常情況），today 那張圖才有東西可看
-          const t = new Date();
-          t.setHours(8 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 60), 0, 0);
-          const todayStr = fakeFormatDate(t);
-          updateTime = todayStr;
-          statusUpdateTime = todayStr;
-        } else {
-          const updated = new Date(submittedAt.getTime() + Math.floor(Math.random() * 5) * 86400000 + Math.floor(Math.random() * 8) * 3600000);
-          const updatedStr = fakeFormatDate(updated < now ? updated : now);
-          updateTime = updatedStr;
-          statusUpdateTime = updatedStr;
-        }
-      }
-
-      rows.push({
-        city: city,
-        status: status,
-        timestamp: fakeFormatDate(submittedAt),
-        updateTime: updateTime,
-        statusUpdateTime: statusUpdateTime,
-        outOfScope: outOfScope
-      });
-    }
-
-    return rows;
-  }
-
-  // 從網址 ?guild=公會名稱 讀取目前要看哪個公會的資料，行為對齊 dashboard.html；
-  // preview 版沒有真的 GUILD_MAPPING，直接拿 FAKE_CITIES 當作「公會名稱」比對，方便展示效果
-  const GUILD_FILTER = new URLSearchParams(window.location.search).get('guild') || '';
+  // 每日新增案件趨勢圖的下鑽狀態：'daily' 是近30天檢視，'hourly' 是點了某一天之後的當日每小時檢視
+  let trendViewMode = 'daily';
+  let trendViewDate = null;   // hourly 模式下，目前顯示的是哪一天（yyyy-MM-dd）
+  let trendDateKeys = null;   // daily 模式下，X 軸每個標籤對應的完整日期字串，點擊時用來查表
+  let trendAllRows = [];      // 記住最近一次的完整資料，切換日/時檢視、換日期時都不用重新打 API
 
   async function loadData() {
+    // 網址根本沒帶 guild 參數，連 API 都不用打，直接告知需要用專屬連結開啟
+    if (!GUILD_TOKEN) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('guildMissing').style.display = 'block';
+      return;
+    }
     if (typeof Chart === 'undefined') {
       const box = document.getElementById('errorBox');
       document.getElementById('loading').style.display = 'none';
@@ -656,39 +570,46 @@
       box.textContent = '圖表套件（Chart.js）載入失敗，請確認網路連線或重新整理頁面再試一次。';
       return;
     }
+    try {
+      // 這裡打的是 action=guildInfo，不是 action=dashboard——不需要 OTP session token，
+      // 網址裡的權杖字串本身就是憑證；cache: 'no-store' + 隨機值一樣是避免吃到瀏覽器快取
+      const cacheBuster = Date.now();
+      const res = await fetch(
+        `${WEB_APP_URL}?action=guildInfo&guild=${encodeURIComponent(GUILD_TOKEN)}&_=${cacheBuster}`,
+        { redirect: 'follow', cache: 'no-store' }
+      );
+      const data = await res.json();
 
-    const generated = generateFakeRows();
-
-    if (GUILD_FILTER) {
-      // preview 版用「城市名稱＝公會名稱」簡化模擬；找不到就跟正式版一樣顯示明確錯誤，不要靜默顯示空白
-      if (FAKE_CITIES.indexOf(GUILD_FILTER) === -1) {
+      if (data.code === 'GUILD_NOT_FOUND') {
+        // 權杖對不到任何縣市（連結打錯、或權杖已被系統管理員撤銷／輪替），明確顯示錯誤，
+        // 不要靜默顯示成空白畫面，避免誤判成「目前沒有案件」
+        document.getElementById('mainContent').style.display = 'none';
         document.getElementById('loading').style.display = 'none';
-        const box = document.getElementById('errorBox');
-        box.style.display = 'block';
-        box.textContent = `找不到公會「${GUILD_FILTER}」（假資料版可用：${FAKE_CITIES.join('、')}）`;
+        document.getElementById('guildMissing').style.display = 'block';
+        document.getElementById('guildMissingNotice').textContent =
+          data.message || '找不到這個公會連結，請確認網址是否正確，或聯繫系統管理員確認連結是否已更新。';
         return;
       }
-      allRows = generated.filter(r => r.city === GUILD_FILTER);
-    } else {
-      allRows = generated;
-    }
+      if (data.status !== 'ok') throw new Error(data.message || '資料載入失敗');
 
-    renderScopeNote(FAKE_OUT_OF_SCOPE_CONDITIONS);
+      allRows = data.rows;
+      renderScopeNote(data.outOfScopeConditions);
 
-    const badge = document.getElementById('guildScopeBadge');
-    if (GUILD_FILTER) {
-      badge.textContent = `📍 ${GUILD_FILTER}`;
+      const badge = document.getElementById('guildScopeBadge');
+      badge.textContent = `📍 ${data.guildName}`;
       badge.style.display = 'inline-block';
-    } else {
-      badge.style.display = 'none';
-    }
-    document.getElementById('noCityStatLine').style.display = GUILD_FILTER ? 'none' : 'block';
-    document.getElementById('noCityCount').textContent = FAKE_NO_CITY_COUNT;
 
-    document.getElementById('mainContent').style.display = 'block';
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
-    render();
+      document.getElementById('guildMissing').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'block';
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      render();
+    } catch (err) {
+      document.getElementById('loading').style.display = 'none';
+      const box = document.getElementById('errorBox');
+      box.style.display = 'block';
+      box.textContent = '載入失敗：' + err.message;
+    }
   }
 
   // 依後端回傳的範疇外判斷條件（不限 2 個，且每個欄位可以有各自不同的判斷值），
@@ -787,11 +708,30 @@
       data: dateKeys.map(k => (cityDayCounts[city] && cityDayCounts[city][k]) || 0)
     }));
 
-    return { labels, totalData, citySeries };
+    return { labels, totalData, citySeries, dateKeys };
   }
 
   function renderDailyTrendChart(rows) {
-    const { labels, totalData, citySeries } = computeDailyTrendByCity(rows, 30);
+    trendAllRows = rows; // 記住完整資料，切回日檢視或換一天的時檢視時都要用
+    if (trendViewMode === 'hourly' && trendViewDate) {
+      renderHourlyTrendChartInternal(rows, trendViewDate);
+    } else {
+      renderDailyTrendChartInternal(rows);
+    }
+  }
+
+  function renderDailyTrendChartInternal(rows) {
+    trendViewMode = 'daily';
+    trendViewDate = null;
+    trendDateKeys = null;
+
+    const { labels, totalData, citySeries, dateKeys } = computeDailyTrendByCity(rows, 30);
+    trendDateKeys = dateKeys; // 點擊 X 軸標籤時，用這個陣列把「第幾個標籤」換回完整日期字串
+
+    document.getElementById('trendChartTitle').textContent = '每日新增案件趨勢';
+    document.getElementById('trendChartSubtitle').textContent =
+      '近 30 天，依提交時間統計，「全部」為總量，點圖例可切換單一縣市；點下方日期可看該日每小時趨勢';
+
     if (trendChart) trendChart.destroy();
 
     const datasets = [
@@ -823,6 +763,8 @@
       data: { labels: labels, datasets: datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
+        onClick: handleTrendChartClick,
+        onHover: handleTrendChartHover,
         scales: {
           y: { beginAtZero: true, ticks: { precision: 0 } },
           x: { grid: { display: false } }
@@ -830,6 +772,134 @@
         plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } } }
       }
     });
+  }
+
+  /**
+   * 依「小時」分組，統計某一天（dateKey，格式 yyyy-MM-dd）24 小時各自新增幾筆案件，
+   * 邏輯跟 computeDailyTrendByCity 幾乎一樣，只是分組單位從「天」換成「時」。
+   */
+  function computeHourlyTrendByCity(rows, dateKey) {
+    const totalCounts = {}; // { 'HH': count }
+    const cityHourCounts = {}; // { city: { 'HH': count } }
+    const citiesSet = new Set();
+
+    rows.forEach(r => {
+      if (!r.timestamp || r.timestamp.slice(0, 10) !== dateKey) return;
+      const hour = r.timestamp.slice(11, 13); // 'yyyy-MM-ddTHH:mm:ss' 的第 12-13 碼是小時
+      totalCounts[hour] = (totalCounts[hour] || 0) + 1;
+
+      const city = r.city && r.city.trim() ? r.city : '（未填縣市）';
+      citiesSet.add(city);
+      if (!cityHourCounts[city]) cityHourCounts[city] = {};
+      cityHourCounts[city][hour] = (cityHourCounts[city][hour] || 0) + 1;
+    });
+
+    const labels = [];
+    const hourKeys = [];
+    for (let h = 0; h < 24; h++) {
+      const key = String(h).padStart(2, '0');
+      hourKeys.push(key);
+      labels.push(key + '時');
+    }
+
+    const totalData = hourKeys.map(k => totalCounts[k] || 0);
+
+    const cities = Array.from(citiesSet).sort((a, b) => {
+      const totalA = Object.values(cityHourCounts[a]).reduce((s, v) => s + v, 0);
+      const totalB = Object.values(cityHourCounts[b]).reduce((s, v) => s + v, 0);
+      return totalB - totalA;
+    });
+
+    const citySeries = cities.map(city => ({
+      city,
+      data: hourKeys.map(k => (cityHourCounts[city] && cityHourCounts[city][k]) || 0)
+    }));
+
+    return { labels, totalData, citySeries };
+  }
+
+  function renderHourlyTrendChartInternal(rows, dateKey) {
+    trendViewMode = 'hourly';
+    trendViewDate = dateKey;
+
+    const { labels, totalData, citySeries } = computeHourlyTrendByCity(rows, dateKey);
+
+    document.getElementById('trendChartTitle').textContent = `${dateKey} 每小時新增案件`;
+    document.getElementById('trendChartSubtitle').innerHTML =
+      `依提交時間統計，「全部」為總量，點圖例可切換單一縣市；<a href="#" onclick="event.preventDefault(); backToDailyTrendView();" style="color:var(--accent); text-decoration:underline; cursor:pointer;">← 回到近 30 天檢視</a>`;
+
+    if (trendChart) trendChart.destroy();
+
+    const datasets = [
+      {
+        label: '全部',
+        data: totalData,
+        borderColor: TREND_TOTAL_COLOR,
+        backgroundColor: 'transparent',
+        borderWidth: 3,
+        borderDash: [7, 4],
+        fill: false,
+        tension: 0.3,
+        pointRadius: 2
+      },
+      ...citySeries.map((s, i) => ({
+        label: s.city,
+        data: s.data,
+        borderColor: getCityColor(i, citySeries.length),
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        fill: false,
+        tension: 0.3,
+        pointRadius: 1
+      }))
+    ];
+
+    trendChart = new Chart(document.getElementById('dailyTrendChart'), {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } },
+          x: { grid: { display: false } }
+        },
+        plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } } }
+      }
+    });
+  }
+
+  /** 「← 回到近 30 天檢視」連結會呼叫這個，切回日檢視，用記住的 trendAllRows 重畫 */
+  function backToDailyTrendView() {
+    renderDailyTrendChartInternal(trendAllRows || []);
+  }
+
+  /**
+   * 只有日檢視（trendViewMode === 'daily'）才需要處理點擊：判斷使用者是不是點在 X 軸標籤
+   * （日期文字）那一排，不是點在圖表資料本身。用 chart.scales.x 的座標範圍判斷點擊位置，
+   * 命中的話取得對應的完整日期字串（trendDateKeys 裡對應同一個 index），切到那一天的時檢視。
+   */
+  function handleTrendChartClick(evt) {
+    if (trendViewMode !== 'daily' || !trendChart || !trendDateKeys) return;
+
+    // 用 Chart.js 官方內建的方法找出「點的位置最靠近哪一個資料索引（哪一天）」，
+    // 不用自己算像素邊界（那個做法太脆弱，容易因為版面配置對不準，導致永遠判斷不到）。
+    // 點在那一天對應的整條直欄範圍內都算數，不用精準點在標籤文字上。
+    const points = trendChart.getElementsAtEventForMode(evt, 'index', { intersect: false }, true);
+    if (!points || points.length === 0) return;
+
+    const index = points[0].index;
+    const dateKey = trendDateKeys[index];
+    if (!dateKey) return;
+
+    renderHourlyTrendChartInternal(trendAllRows || [], dateKey);
+  }
+
+  /** 滑鼠移到 X 軸標籤範圍時，游標變成手指，讓使用者知道這裡可以點 */
+  function handleTrendChartHover(evt) {
+    if (trendViewMode !== 'daily' || !trendChart) return;
+    // 跟點擊判斷用同一套邏輯：滑鼠所在位置能不能找到對應的資料索引，能就顯示手指游標
+    const points = trendChart.getElementsAtEventForMode(evt, 'index', { intersect: false }, true);
+    evt.native.target.style.cursor = (points && points.length > 0) ? 'pointer' : 'default';
   }
 
   /**
@@ -848,9 +918,12 @@
       const key = r.updateTime.slice(0, 10);
       if (key !== todayKey) return;
 
+      // 有 UPDATE_TIME 但處理狀態是空白，代表公會改過又清掉了（沒有真的處理完），不算今日異動
+      const status = r.status && r.status.trim() ? r.status.trim() : '';
+      if (!status) return;
+
       todayCount++;
       const city = r.city && r.city.trim() ? r.city : '（未填縣市）';
-      const status = r.status && r.status.trim() ? r.status : '（狀態空白）';
       if (!cityStatusMap[city]) cityStatusMap[city] = {};
       cityStatusMap[city][status] = (cityStatusMap[city][status] || 0) + 1;
       statusSet.add(status);
