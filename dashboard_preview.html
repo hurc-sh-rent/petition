@@ -448,8 +448,9 @@
     return String(s || '')
       .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)) // 全形 ASCII → 半形
       .replace(/\u3000/g, ' ')  // 全形空白 → 半形空白
-      .replace(/\s+/g, '')      // 移除所有空白（含中間空白）
-      .trim();
+      .trim()
+      .replace(/^\d+\s*[.、\-]?\s*/, '') // 去除開頭的數字序號前綴，例如「1.」「2、」「11-」「12 」
+      .replace(/\s+/g, '');     // 移除所有空白（含中間空白）
   }
   const STATUS_STAGE_MAP_NORMALIZED = {};
   STATUS_STAGE_ORDER.forEach(s => { STATUS_STAGE_MAP_NORMALIZED[normalizeStatusForMatch(s.key)] = s; });
