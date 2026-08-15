@@ -467,7 +467,7 @@
   /** 組出單一階段卡片的 HTML（給 renderStageFlow 共用） */
   function buildStageCardHtml(s, bucket) {
     const warnBadge = (!s.terminal && bucket.warnCount > 0)
-      ? `<span class="stage-warn">⚠ ${bucket.warnCount} 件已逾 ${STAGE_WARNING_DAYS} 天</span>`
+      ? `<span class="stage-warn">⚠ ${bucket.warnCount} 件已逾期未異動</span>`
       : '';
     return `
       <div class="stage-card ${s.terminal ? 'terminal' : ''}">

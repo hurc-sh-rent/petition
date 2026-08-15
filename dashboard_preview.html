@@ -472,7 +472,7 @@
   /** 組出單一階段卡片的 HTML（給 renderStageFlow 共用） */
   function buildStageCardHtml(s, bucket) {
     const warnBadge = (!s.terminal && bucket.warnCount > 0)
-      ? `<span class="stage-warn">⚠ ${bucket.warnCount} 件已逾 ${STAGE_WARNING_DAYS} 天</span>`
+      ? `<span class="stage-warn">⚠ ${bucket.warnCount} 件已逾期未異動</span>`
       : '';
     return `
       <div class="stage-card ${s.terminal ? 'terminal' : ''}">
@@ -552,7 +552,7 @@
   let todayChart = null;
 
   // ===== 假資料產生器（純前端，不打任何 API） =====
-  const FAKE_CITIES = ['北北基宜', '桃竹苗', '中彰投', '雲嘉南', '高屏澎', '花東金馬'];
+  const FAKE_CITIES = ['臺北市', '新北市', '桃園市', '高雄市', '臺南市', '臺中市'];
   // 狀態值直接沿用 STATUS_STAGE_ORDER（12 個階段的定義），非結案階段給比較高的權重，
   // 才會有足夠的「進行中」案件可以示範卡關示警；終點（結案）階段權重較低，比較貼近實務上
   // 「多數案件卡在中間某一步」的分布，而不是均勻分布在 12 個狀態上
@@ -644,8 +644,17 @@
     return rows;
   }
 
-  // 從網址 ?guild=公會名稱 讀取目前要看哪個公會的資料，行為對齊 dashboard.html；
-  // preview 版沒有真的 GUILD_MAPPING，直接拿 FAKE_CITIES 當作「公會名稱」比對，方便展示效果
+  // 從網址 ?guild=權杖 讀取目前要看哪個公會的資料，行為對齊 dashboard.html；
+  // 這裡直接放跟 程式碼.gs 的 GUILD_ACCESS_TOKENS 完全相同的對照表，所以正式環境要發送
+  // 給各公會的真實連結，可以直接拿來這個假資料版先測試排版效果，不用等後端部署好
+  const GUILD_ACCESS_TOKENS = {
+    'BGTGofqv0XVVijjNXe954yU1EH7J7jZffQIUfIrC': '臺北市',
+    'tMQufLazWOwCBxG1xU6MYbZ7lB1XkTftPsaBDqs7': '新北市',
+    'skShxWlywS0heppRc53cZ3ueVdbYFz9qwrNGJZA5': '桃園市',
+    'Wl3mp5J4GRAy0iMpzlzvAkwVj4Bc9sWnW0Esny7O': '高雄市',
+    'p4iMBCf1NnfUlj7LrEFpcwHi1rSNbhISibyMpVis': '臺南市',
+    'nzwLeUAETT17nq82YJMFVnbLG077b3NYLMB3PTNZ': '臺中市'
+  };
   const GUILD_FILTER = new URLSearchParams(window.location.search).get('guild') || '';
 
   async function loadData() {
@@ -658,17 +667,20 @@
     }
 
     const generated = generateFakeRows();
+    let matchedCity = null;
 
     if (GUILD_FILTER) {
-      // preview 版用「城市名稱＝公會名稱」簡化模擬；找不到就跟正式版一樣顯示明確錯誤，不要靜默顯示空白
-      if (FAKE_CITIES.indexOf(GUILD_FILTER) === -1) {
+      // preview 版跟正式後端一樣：guild 參數是權杖，不是縣市名稱本身，對不到就明確顯示錯誤，
+      // 不要靜默顯示成空白（避免誤判成「這個公會目前沒有案件」）
+      matchedCity = GUILD_ACCESS_TOKENS[GUILD_FILTER];
+      if (!matchedCity) {
         document.getElementById('loading').style.display = 'none';
         const box = document.getElementById('errorBox');
         box.style.display = 'block';
-        box.textContent = `找不到公會「${GUILD_FILTER}」（假資料版可用：${FAKE_CITIES.join('、')}）`;
+        box.textContent = '找不到這個公會連結，請確認網址是否正確，或聯繫系統管理員確認連結是否已更新';
         return;
       }
-      allRows = generated.filter(r => r.city === GUILD_FILTER);
+      allRows = generated.filter(r => r.city === matchedCity);
     } else {
       allRows = generated;
     }
@@ -676,8 +688,8 @@
     renderScopeNote(FAKE_OUT_OF_SCOPE_CONDITIONS);
 
     const badge = document.getElementById('guildScopeBadge');
-    if (GUILD_FILTER) {
-      badge.textContent = `📍 ${GUILD_FILTER}`;
+    if (matchedCity) {
+      badge.textContent = `📍 ${matchedCity}`;
       badge.style.display = 'inline-block';
     } else {
       badge.style.display = 'none';
