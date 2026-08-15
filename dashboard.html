@@ -448,15 +448,33 @@
    * - 處理狀態文字對不到任何定義階段（例如舊版狀態值）→ 計入 unknownCount，不參與卡關判斷，
    *   避免因為文字對不上就被誤判成「卡關」
    */
+  /**
+   * 把狀態文字正規化後再比對，容錯常見的「看起來一樣、但編碼不同」問題：
+   * - 全形括號（）／逗號，等 vs 半形 ()  ,  ——Google 表單下拉選單、Sheets 手動輸入很容易混用
+   * - 前後或中間多打的空白
+   * 只用在「拿來查表比對」的時候，不影響畫面上實際顯示的文字（畫面仍顯示 STATUS_STAGE_ORDER
+   * 裡定義好的標準字串，或原始文字，兩者顯示上一致，差異只在背後怎麼判斷是同一個狀態）
+   */
+  function normalizeStatusForMatch(s) {
+    return String(s || '')
+      .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)) // 全形 ASCII → 半形
+      .replace(/\u3000/g, ' ')  // 全形空白 → 半形空白
+      .replace(/\s+/g, '')      // 移除所有空白（含中間空白）
+      .trim();
+  }
+  const STATUS_STAGE_MAP_NORMALIZED = {};
+  STATUS_STAGE_ORDER.forEach(s => { STATUS_STAGE_MAP_NORMALIZED[normalizeStatusForMatch(s.key)] = s; });
+
   function computeStageStats(rows) {
     const stageCounts = {}; // stageKey（或 '__start__'）-> { count, warnCount }
     const ensure = key => (stageCounts[key] || (stageCounts[key] = { count: 0, warnCount: 0 }));
     let unknownCount = 0;
+    const unknownSamples = new Set(); // 對不到的實際文字，最多留 5 個範例方便排查是哪裡對不上
 
     rows.forEach(r => {
-      const status = (r.status || '').trim();
+      const rawStatus = (r.status || '').trim();
 
-      if (!status) {
+      if (!rawStatus) {
         const bucket = ensure('__start__');
         bucket.count++;
         const age = daysSince(r.timestamp);
@@ -464,10 +482,18 @@
         return;
       }
 
-      const stage = STATUS_STAGE_MAP[status];
-      if (!stage) { unknownCount++; return; }
+      // 先試完全比對，對不到再試正規化後比對（容錯全形/半形、空白差異）
+      const stage = STATUS_STAGE_MAP[rawStatus] || STATUS_STAGE_MAP_NORMALIZED[normalizeStatusForMatch(rawStatus)];
+      if (!stage) {
+        unknownCount++;
+        if (unknownSamples.size < 5) unknownSamples.add(rawStatus);
+        return;
+      }
 
-      const bucket = ensure(status);
+      // 用「定義好的標準字串」(stage.key) 當 bucket key，不是原始文字——這樣即使原始文字
+      // 因為全形/半形或空白跟標準定義有落差，也能正確歸類到同一個階段，不會各自散開變成
+      // 好幾個「看起來很像但其實是不同 key」的桶
+      const bucket = ensure(stage.key);
       bucket.count++;
       if (!stage.terminal) {
         // 優先用「處理狀態」自己的變更時間；沒有才退回用整列的最後更新時間
@@ -477,7 +503,7 @@
       }
     });
 
-    return { stageCounts, unknownCount };
+    return { stageCounts, unknownCount, unknownSamples: Array.from(unknownSamples) };
   }
 
   /** 組出單一階段卡片的 HTML（給 renderStageFlow 共用） */
@@ -495,7 +521,7 @@
   }
 
   function renderStageFlow(rows) {
-    const { stageCounts, unknownCount } = computeStageStats(rows);
+    const { stageCounts, unknownCount, unknownSamples } = computeStageStats(rows);
 
     const startBucket = stageCounts['__start__'] || { count: 0, warnCount: 0 };
     document.getElementById('stageStartCount').textContent = startBucket.count;
@@ -551,7 +577,7 @@
     }).join('');
 
     document.getElementById('stageUnknownNote').textContent = unknownCount > 0
-      ? `另有 ${unknownCount} 件案件的處理狀態文字，對不到目前定義的 12 個階段（可能是舊版狀態值或尚未同步的自訂文字），未計入以上卡關統計。`
+      ? `另有 ${unknownCount} 件案件的處理狀態文字，對不到目前定義的 12 個階段（可能是舊版狀態值、用字略有差異，或尚未同步的自訂文字），未計入以上卡關統計。實際文字範例：${unknownSamples.map(s => `「${s}」`).join('、')}`
       : '';
   }
 
