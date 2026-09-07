@@ -159,6 +159,24 @@
   .chart-card p { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
   .chart-wrap { position: relative; height: 320px; }
 
+  /* 每週新增案件統計表 */
+  .weekly-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .weekly-table th {
+    text-align: left; font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+  }
+  .weekly-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .weekly-table tr:last-child td { border-bottom: none; }
+  .weekly-table th.col-num, .weekly-table td.col-num {
+    text-align: right; white-space: nowrap; font-family: 'DM Mono', monospace;
+  }
+  .weekly-table td.col-count { font-weight: 700; color: var(--text-primary); }
+  .weekly-table td.col-cumulative { color: var(--text-secondary); font-size: 13px; }
+  .weekly-table tr.current-week td { background: var(--accent-light); }
+  .weekly-table tr.current-week td:first-child::after {
+    content: '（本週）'; font-size: 11px; color: var(--accent); margin-left: 6px;
+  }
+
   footer { margin-top: 40px; text-align: center; font-size: 12px; color: var(--text-secondary); }
 
   /* ===== 案件階段追蹤與卡關示警 ===== */
@@ -291,6 +309,20 @@
           <h3 id="trendChartTitle">每日新增案件趨勢</h3>
           <p id="trendChartSubtitle">近 30 天，依提交時間統計，「全部」為總量，點圖例可切換單一縣市；點下方日期可看該日每小時趨勢</p>
           <div class="chart-wrap"><canvas id="dailyTrendChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>每週新增案件統計</h3>
+          <p>自 2026-08-10 該週起，依提交時間統計，只看總量不分縣市；每週以週一為起始日</p>
+          <table class="weekly-table">
+            <thead>
+              <tr>
+                <th>週別</th>
+                <th class="col-num">新增案件數</th>
+                <th class="col-num">累計</th>
+              </tr>
+            </thead>
+            <tbody id="weeklyTableBody"></tbody>
+          </table>
         </div>
       </div>
 
@@ -745,6 +777,7 @@
     renderCityBarChart(stats);
     renderCityPieChart(stats);
     renderDailyTrendChart(allRows);
+    renderWeeklyTrendChart(allRows);
     renderTodayCityStats(allRows);
     renderStageFlow(allRows);
   }
@@ -821,6 +854,80 @@
     }));
 
     return { labels, totalData, citySeries, dateKeys };
+  }
+
+  /**
+   * 依「週」分組，統計每一週各自新增幾筆案件（只算總量，不分縣市）。
+   * 從 WEEKLY_STATS_START_WEEK 那一週開始，一路排到本週為止。
+   * 每一週以「週一」為起始日，跟一般理解的「這禮拜」一致。
+   */
+  const WEEKLY_STATS_START_WEEK = '2026-08-10'; // 系統正式開放民眾填寫的那一週（週一）
+
+  function computeWeeklyTrend(rows) {
+    // 給一個日期，回傳它所屬那一週的「週一」日期字串（yyyy-MM-dd）
+    function getWeekStartKey(dateKey) {
+      // 用 UTC 正午建構，避開時區換算讓日期整個跳掉的問題
+      const d = new Date(dateKey + 'T12:00:00Z');
+      const dayOfWeek = d.getUTCDay();           // 0=週日, 1=週一, ... 6=週六
+      const offsetToMonday = (dayOfWeek + 6) % 7; // 週一→0、週日→6，往回推到當週週一
+      d.setUTCDate(d.getUTCDate() - offsetToMonday);
+      return d.toISOString().slice(0, 10);
+    }
+
+    const weekCounts = {}; // { 週一日期字串: count }
+    rows.forEach(r => {
+      if (!r.timestamp) return;
+      const weekKey = getWeekStartKey(r.timestamp.slice(0, 10));
+      weekCounts[weekKey] = (weekCounts[weekKey] || 0) + 1;
+    });
+
+    // 從指定的起始週，一路往後排到本週為止（沒有案件的那幾週也要列出來、值是 0，
+    // 不然表格會看不出中間有空檔）
+    const thisWeekStart = getWeekStartKey(getTaipeiDateKey(new Date()));
+    const weeks = [];
+    let cumulative = 0;
+    let cursor = new Date(WEEKLY_STATS_START_WEEK + 'T12:00:00Z');
+    const endTime = new Date(thisWeekStart + 'T12:00:00Z').getTime();
+
+    while (cursor.getTime() <= endTime) {
+      const weekKey = cursor.toISOString().slice(0, 10);
+      const count = weekCounts[weekKey] || 0;
+      cumulative += count;
+
+      // 該週的最後一天（週日），組出「MM-DD ~ MM-DD」這種好讀的區間標示
+      const weekEnd = new Date(cursor.getTime());
+      weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+      const weekEndKey = weekEnd.toISOString().slice(0, 10);
+
+      weeks.push({
+        weekKey: weekKey,
+        label: `${weekKey.slice(5)} ~ ${weekEndKey.slice(5)}`,
+        count: count,
+        cumulative: cumulative,
+        isCurrentWeek: weekKey === thisWeekStart
+      });
+
+      cursor.setUTCDate(cursor.getUTCDate() + 7);
+    }
+
+    return weeks;
+  }
+
+  function renderWeeklyTrendChart(rows) {
+    const weeks = computeWeeklyTrend(rows);
+    const tbody = document.getElementById('weeklyTableBody');
+
+    if (weeks.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="3" style="color:var(--text-secondary);">目前沒有可統計的資料</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = weeks.map(w => `
+      <tr class="${w.isCurrentWeek ? 'current-week' : ''}">
+        <td>${w.label}</td>
+        <td class="col-num col-count">${w.count}</td>
+        <td class="col-num col-cumulative">${w.cumulative}</td>
+      </tr>`).join('');
   }
 
   function renderDailyTrendChart(rows) {
