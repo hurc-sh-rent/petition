@@ -312,7 +312,7 @@
     // 處理狀態原本在卡頭用標籤顯示，這裡搬到內文；「無需處理之理由」有值的話接在標籤後面顯示
     const rawStatus = row["處理狀態"];
     const statusText = rawStatus || "尚未處理";
-    const reasonValue = row["無需處理之理由"];
+    const reasonValue = row["公會回報狀態"];
     const hasReason = reasonValue && String(reasonValue).trim() !== "";
     html += `
       <div class="field-row">
